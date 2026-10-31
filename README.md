@@ -9,6 +9,13 @@ cannon, every run (won or lost) earns points, a win opens the next level. Progre
 on the server after every run, purchase and start. Mouse wheel zooms, dragging pans, `0`
 resets the view.
 
+Five turret kinds (cannon, mortar, flamer, laser, tesla) deal five damage types; six enemy
+types differ in colour, resistances, immunities and shields. Each turret has a facing and a
+swivel arc (`R` turns, `A` narrows the arc, `1`–`5` picks the kind). Research unlocks a kind
+and improves all turrets of it; the first kind is cheap, each further one costs four times
+more. A click during a run fires the researched precision shot. Fire rates are aggregated per
+tick, so 100,000,000 shots per second cost no more than ten.
+
 Enemies flow, they are not pushed: every water cell holds at most `cellCapacity` enemies, a full
 cell is not entered, and congestion raises the route cost so the stream spills into other
 channels. One simulated blob stands for `packet` enemies, so mass levels keep the blob count
@@ -21,7 +28,7 @@ with Docker Compose.
 | Where | What |
 |---|---|
 | `src/sim/` | deterministic simulation: seeded map generator, distance field, run rules (fixed step 1/30 s); no DOM, runs headless |
-| `src/content/` | level data |
+| `src/content/` | level data, enemy types (resistances, shields), turret kinds (damage type, pattern, base stats) |
 | `src/game/` | research (nodes, effects, loadout), points formula, save game (versioned, validated), server client |
 | `src/render/` | canvas view; reads the world, never changes it |
 | `src/main.ts` | page: preparation, run loop, HUD |

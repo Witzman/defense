@@ -1,5 +1,15 @@
 import { LAND, cellAt, type GameMap, type Point } from "../sim/map.ts";
-import type { World } from "../sim/world.ts";
+import type { Placement, World } from "../sim/world.ts";
+import { ENEMY_TYPES } from "../content/enemies.ts";
+import { turretType, type TurretKind } from "../content/turrets.ts";
+
+const ENEMY_COLORS = new Map(ENEMY_TYPES.map((t) => [t.id, t] as const));
+const RGB = new Map(ENEMY_TYPES.map((t) => [t.id, hexToRgb(t.color)] as const));
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 /** Flat style after the owner's reference (ref-5): light islands on dark water. */
 export const COLORS = {
@@ -73,7 +83,10 @@ export function drawTerrain(map: GameMap, scale: number): HTMLCanvasElement {
 }
 
 export interface Overlay {
-  hover?: { cell: Point; valid: boolean; range: number };
+  /** The turret the player is about to place, or the one under the cursor. */
+  hover?: { placement: Placement; valid: boolean; range: number; existing: boolean };
+  /** Show every turret's swivel arc (preparation). */
+  arcs?: boolean;
 }
 
 export function drawWorld(g: CanvasRenderingContext2D, view: View, terrain: HTMLCanvasElement, w: World, alpha: number, time: number, overlay: Overlay) {
@@ -101,8 +114,6 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, terrain: HTML
   }
   if (blobs > 0) {
     g.globalAlpha = blobs;
-    g.fillStyle = COLORS.enemy;
-    g.strokeStyle = COLORS.enemyEdge;
     g.lineWidth = Math.max(1, s * 0.06);
     const minX = -ox / s - 1;
     const maxX = (g.canvas.width - ox) / s + 1;
@@ -112,36 +123,79 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, terrain: HTML
       const x = e.px + (e.x - e.px) * alpha;
       const y = e.py + (e.y - e.py) * alpha;
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      blob(g, ...at(x, y), s * 0.3, time + e.id * 1.7);
+      const t = ENEMY_COLORS.get(e.type)!;
+      g.fillStyle = t.color;
+      g.strokeStyle = t.edge;
+      // A packet of many reads a little bigger than a single enemy.
+      blob(g, ...at(x, y), s * 0.3 * (1 + Math.min(0.6, Math.log10(e.size) * 0.3)), time + e.id * 1.7);
     }
     g.globalAlpha = 1;
   }
 
-  // Shots of the last tick.
-  g.strokeStyle = COLORS.shot;
-  g.lineWidth = Math.max(1, s * 0.05);
-  g.beginPath();
-  for (const shot of w.shots) {
-    g.moveTo(...at(shot.from.x, shot.from.y));
-    g.lineTo(...at(shot.to.x, shot.to.y));
+  // Turrets, with their swivel arc while preparing.
+  for (const t of w.turrets) {
+    const [x, y] = at(t.x, t.y);
+    if (overlay.arcs) drawArc(g, x, y, t.placement, t.stats.range * s, t.kind);
+    drawTurret(g, x, y, s, t.kind, t.aim);
   }
-  g.stroke();
 
-  // Turrets.
-  for (const t of w.turrets) drawTurret(g, ...at(t.cell.x + 0.5, t.cell.y + 0.5), s);
+  // Shots of the last tick.
+  for (const shot of w.shots) {
+    if (shot.kind === "tracer") {
+      g.strokeStyle = turretType(shot.turret).color;
+      g.lineWidth = Math.max(1, s * (shot.turret === "laser" ? 0.09 : 0.05));
+      g.beginPath();
+      g.moveTo(...at(shot.from.x, shot.from.y));
+      g.lineTo(...at(shot.to.x, shot.to.y));
+      g.stroke();
+    } else if (shot.kind === "blast") {
+      g.fillStyle = "rgba(255, 210, 120, 0.45)";
+      disc(g, ...at(shot.at.x, shot.at.y), shot.radius * s);
+    } else {
+      const [x, y] = at(shot.from.x, shot.from.y);
+      g.fillStyle = "rgba(255, 123, 57, 0.35)";
+      g.beginPath();
+      g.moveTo(x, y);
+      g.arc(x, y, shot.range * s, shot.aim - shot.angle / 2, shot.aim + shot.angle / 2);
+      g.closePath();
+      g.fill();
+    }
+  }
 
   if (overlay.hover) {
-    const { cell, valid, range } = overlay.hover;
-    const [cx, cy] = at(cell.x + 0.5, cell.y + 0.5);
-    g.fillStyle = valid ? COLORS.range : COLORS.invalid;
-    disc(g, cx, cy, range * s);
-    if (valid) drawTurret(g, cx, cy, s, 0.6);
+    const { placement: p, valid, range, existing } = overlay.hover;
+    const [cx, cy] = at(p.x + 0.5, p.y + 0.5);
+    if (!valid) {
+      g.fillStyle = COLORS.invalid;
+      disc(g, cx, cy, s * 0.5);
+    } else {
+      drawArc(g, cx, cy, p, range * s, p.kind, 0.3);
+      if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6);
+    }
   }
+}
+
+/** Range and swivel arc of a placement: a full disc, or a wedge around its facing. */
+function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement, r: number, kind: TurretKind, alpha = 0.12) {
+  const arc = ((p.arc ?? 360) * Math.PI) / 180;
+  const facing = ((p.facing ?? 0) * Math.PI) / 180;
+  g.globalAlpha = alpha;
+  g.fillStyle = turretType(kind).color;
+  g.beginPath();
+  if (arc >= 2 * Math.PI - 1e-6) g.arc(x, y, r, 0, 2 * Math.PI);
+  else {
+    g.moveTo(x, y);
+    g.arc(x, y, r, facing - arc / 2, facing + arc / 2);
+    g.closePath();
+  }
+  g.fill();
+  g.globalAlpha = 1;
 }
 
 let densityCanvas: HTMLCanvasElement | undefined;
 let densityImage: ImageData | undefined;
 let softCanvas: HTMLCanvasElement | undefined;
+let mix: Float32Array | undefined;
 
 /** Enemy density per cell as a small image, scaled up with smoothing: masses read as a fluid. */
 function drawDensity(g: CanvasRenderingContext2D, w: World, view: View) {
@@ -153,12 +207,24 @@ function drawDensity(g: CanvasRenderingContext2D, w: World, view: View) {
     densityImage = densityCanvas.getContext("2d")!.createImageData(width, height);
   }
   const data = densityImage!.data;
-  const [r, gg, b] = [0xa7, 0xd6, 0x4a];
-  for (let i = 0; i < w.density.length; i++) {
-    const d = w.density[i]!;
-    data[i * 4] = r;
-    data[i * 4 + 1] = gg;
-    data[i * 4 + 2] = b;
+  // Colour per cell is the size-weighted mix of the types in it, so groups stay apart even from afar.
+  const n = width * height;
+  if (!mix || mix.length !== n * 4) mix = new Float32Array(n * 4);
+  const m = mix;
+  m.fill(0);
+  for (const e of w.enemies) {
+    const i = (Math.floor(e.y) * width + Math.floor(e.x)) * 4;
+    const [r, gg, b] = RGB.get(e.type)!;
+    m[i]! += r * e.size;
+    m[i + 1]! += gg * e.size;
+    m[i + 2]! += b * e.size;
+    m[i + 3]! += e.size;
+  }
+  for (let i = 0; i < n; i++) {
+    const d = m[i * 4 + 3]!;
+    data[i * 4] = d > 0 ? m[i * 4]! / d : 0;
+    data[i * 4 + 1] = d > 0 ? m[i * 4 + 1]! / d : 0;
+    data[i * 4 + 2] = d > 0 ? m[i * 4 + 2]! / d : 0;
     // Any presence reads clearly; fuller cells get denser. Square root keeps thin streams visible.
     data[i * 4 + 3] = d <= 0 ? 0 : Math.min(255, 150 + Math.sqrt(d / w.cellCapacity) * 105);
   }
@@ -180,12 +246,27 @@ function drawDensity(g: CanvasRenderingContext2D, w: World, view: View) {
   g.drawImage(softCanvas, view.ox, view.oy, width * view.scale, height * view.scale);
 }
 
-function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, s: number, opacity = 1) {
+/** Ring in the kind's colour, dark body, a barrel along the aim and the kind's symbol: the same symbol as in the bar. */
+export function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, s: number, kind: TurretKind, aim: number, opacity = 1) {
+  const t = turretType(kind);
   g.globalAlpha = opacity;
-  g.fillStyle = COLORS.turretRing;
+  g.fillStyle = t.color;
   disc(g, x, y, s * 0.45);
   g.fillStyle = COLORS.turret;
-  disc(g, x, y, s * 0.33);
+  disc(g, x, y, s * 0.35);
+  g.strokeStyle = t.color;
+  g.lineWidth = Math.max(1.5, s * 0.12);
+  g.beginPath();
+  g.moveTo(x + Math.cos(aim) * s * 0.2, y + Math.sin(aim) * s * 0.2);
+  g.lineTo(x + Math.cos(aim) * s * 0.62, y + Math.sin(aim) * s * 0.62);
+  g.stroke();
+  if (s >= 14) {
+    g.fillStyle = t.color;
+    g.font = `${Math.round(s * 0.42)}px system-ui, sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(t.symbol, x, y + s * 0.02);
+  }
   g.globalAlpha = 1;
 }
 

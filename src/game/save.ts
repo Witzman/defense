@@ -1,4 +1,5 @@
-import type { Point } from "../sim/map.ts";
+import { TURRET_TYPES, type TurretKind } from "../content/turrets.ts";
+import type { Placement } from "../sim/world.ts";
 import { runPoints } from "./points.ts";
 import { START_POINTS } from "./research.ts";
 
@@ -9,7 +10,7 @@ export interface LevelProgress {
   won: boolean;
   perfect: boolean;
   /** Where the turrets stood last time; kept between runs and sessions. */
-  placements: Point[];
+  placements: Placement[];
 }
 
 export interface Save {
@@ -41,7 +42,7 @@ export function parseSave(raw: unknown): Save {
       levels[i] = {
         won: lv.won === true,
         perfect: lv.perfect === true,
-        placements: Array.isArray(lv.placements) ? lv.placements.filter(isPoint).map((p) => ({ x: p.x, y: p.y })) : [],
+        placements: Array.isArray(lv.placements) ? lv.placements.flatMap(readPlacement) : [],
       };
     }
   }
@@ -54,16 +55,25 @@ export function parseSave(raw: unknown): Save {
   };
 }
 
-function isPoint(p: unknown): p is Point {
-  return typeof p === "object" && p !== null && Number.isInteger((p as Point).x) && Number.isInteger((p as Point).y);
+const KINDS = new Set<string>(TURRET_TYPES.map((t) => t.id));
+
+/** One stored placement, or none if it is malformed. Saves from before turret kinds hold bare cannons. */
+function readPlacement(raw: unknown): Placement[] {
+  if (typeof raw !== "object" || raw === null) return [];
+  const p = raw as Record<string, unknown>;
+  if (!Number.isInteger(p.x) || !Number.isInteger(p.y)) return [];
+  const kind = p.kind ?? "cannon";
+  if (typeof kind !== "string" || !KINDS.has(kind)) return [];
+  const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+  return [{ x: p.x as number, y: p.y as number, kind: kind as TurretKind, facing: num(p.facing, 0), arc: num(p.arc, 360) }];
 }
 
 function progress(s: Save, level: number): LevelProgress {
   return s.levels[level] ?? { won: false, perfect: false, placements: [] };
 }
 
-export function setPlacements(s: Save, level: number, placements: readonly Point[]): Save {
-  return { ...s, levels: { ...s.levels, [level]: { ...progress(s, level), placements: placements.map((p) => ({ ...p })) } } };
+export function setPlacements(s: Save, level: number, placements: readonly Placement[]): Save {
+  return { ...s, levels: { ...s.levels, [level]: { ...progress(s, level), placements: placements.map((p) => ({ facing: 0, arc: 360, ...p })) } } };
 }
 
 export interface RunResult {

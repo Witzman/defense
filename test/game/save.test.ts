@@ -9,7 +9,7 @@ describe("save game", () => {
   });
 
   it("survives a round trip through JSON", () => {
-    const s = setPlacements(emptySave(), 0, [{ x: 1, y: 2 }]);
+    const s = setPlacements(emptySave(), 0, [{ x: 1, y: 2, kind: "mortar", facing: 45, arc: 180 }]);
     expect(parseSave(JSON.parse(JSON.stringify(s)))).toEqual(s);
   });
 
@@ -22,9 +22,20 @@ describe("save game", () => {
     expect(parseSave({ version: 1, points: 5, research: ["cannon"] })).toMatchObject({ points: 5, research: ["cannon"], unlockedLevel: 0, levels: {} });
   });
 
+  it("reads placements of builds before turret kinds as cannons facing east, full circle", () => {
+    const s = parseSave({ version: 1, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }] } } });
+    expect(s.levels[0]!.placements).toEqual([{ x: 1, y: 2, kind: "cannon", facing: 0, arc: 360 }]);
+  });
+
+  it("keeps kind, facing and arc of a placement", () => {
+    const p = { x: 1, y: 2, kind: "laser", facing: 90, arc: 120 };
+    const s = parseSave({ version: 1, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [p, { x: 3, y: 3, kind: "nonsense" }] } } });
+    expect(s.levels[0]!.placements).toEqual([p]);
+  });
+
   it("drops malformed placements instead of failing the whole save", () => {
     const s = parseSave({ version: 1, points: 5, research: [], unlockedLevel: 0, levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }, { x: "a" }] } } });
-    expect(s.levels[0]!.placements).toEqual([{ x: 1, y: 2 }]);
+    expect(s.levels[0]!.placements).toEqual([{ x: 1, y: 2, kind: "cannon", facing: 0, arc: 360 }]);
   });
 });
 

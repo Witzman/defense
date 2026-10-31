@@ -1,0 +1,35 @@
+# Both jobs run on GitHub-hosted runners. Their names are the required checks
+# of the branch protection: rename a job and the merge button waits for a check
+# that never arrives.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -t .
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commits of the PR, not the merge commit GitHub builds for it.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Attribution and commit length over the commits of this PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git log --format=%B%x00 "$BASE"..HEAD | python3 tools/check_messages.py
+      - name: Process paths do not belong in the product repo
+        run: "! git grep -nE '(^|[^a-zA-Z0-9_/])notes/(reference|traps|specs)/' -- . ':!*.lock'"

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+__pycache__/
+*.pyc
+# Process material never belongs here. The hygiene job fails a build that brings it in.
+notes/

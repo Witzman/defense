@@ -13,8 +13,11 @@ function water(map: Grid, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < map.width && y < map.height && map.cells[y * map.width + x] === WATER;
 }
 
-/** Path length over water from every cell to the target (Dijkstra, 8 neighbours, no corner cutting). */
-export function distanceField(map: Grid, target: Point): Float64Array {
+/**
+ * Path cost over water from every cell to the target (Dijkstra, 8 neighbours, no corner cutting).
+ * Without `cellCost` the cost is the path length; with it, a step costs its length times the mean of both cells' cost.
+ */
+export function distanceField(map: Grid, target: Point, cellCost?: Float32Array): Float64Array {
   const { width } = map;
   const dist = new Float64Array(map.cells.length).fill(UNREACHABLE);
   if (!water(map, target.x, target.y)) return dist;
@@ -33,7 +36,7 @@ export function distanceField(map: Grid, target: Point): Float64Array {
       if (!water(map, nx, ny)) continue;
       if (dx !== 0 && dy !== 0 && !(water(map, x + dx, y) && water(map, x, y + dy))) continue;
       const j = ny * width + nx;
-      const nd = d + cost;
+      const nd = d + (cellCost ? (cost * (cellCost[i]! + cellCost[j]!)) / 2 : cost);
       if (nd < dist[j]!) {
         dist[j] = nd;
         heap.push(j, nd);

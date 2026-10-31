@@ -3,7 +3,14 @@
 Browser tower defense, single player. Enemies are colored blobs that flow through
 water from spawns to goals; turrets stand on islands.
 
-Playable now: level 1 — place up to three turrets on land, start the run, win or lose.
+Playable now: levels 1–3, from single blobs to a stream of 30,000 — place turrets on land,
+start the run, win or lose. Mouse wheel zooms, dragging pans, `0` resets the view.
+`?level=N` opens a level directly (development shortcut until the campaign exists).
+
+Enemies flow, they are not pushed: every water cell holds at most `cellCapacity` enemies, a full
+cell is not entered, and congestion raises the route cost so the stream spills into other
+channels. One simulated blob stands for `packet` enemies, so mass levels keep the blob count
+bounded. `npx vitest bench --run test/sim/perf.bench.ts` measures a simulation step.
 A Node server serves the built game and stores the save game in Postgres, delivered
 with Docker Compose.
 

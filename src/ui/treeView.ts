@@ -2,6 +2,7 @@
  * The research tree on a canvas (#7): the whole tree visible from the start, free pan and zoom, a fixed info
  * column beside it, and a purchase only after confirming there.
  */
+import { applyMove, attachGestures } from "./gestures.ts";
 import { ROOT, type Effect, type ResearchNode } from "../content/tree.ts";
 import { TURRET_TYPES, turretType, type TurretKind } from "../content/turrets.ts";
 import { canBuy, CATALOG, costOf } from "../game/research.ts";
@@ -154,7 +155,7 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
     const n = selected ?? hovered;
     const s = getSave();
     if (!n) {
-      info.innerHTML = `<h3>Forschung</h3><p class="muted">Fahre über einen Knoten oder klicke ihn an. Kaufbar ist, was an Erforschtes grenzt (gelber Rand).</p>
+      info.innerHTML = `<h3>Forschung</h3><p class="muted">Fahre über einen Knoten oder tippe ihn an. Kaufbar ist, was an Erforschtes grenzt (gelber Rand).</p>
         <p class="muted">${s.research.length} von ${CATALOG.length - 1} Knoten erforscht.</p>`;
       return;
     }
@@ -178,12 +179,11 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
       });
       info.append(b);
     } else if (st === "buyable") {
-      info.insertAdjacentHTML("beforeend", `<p class="muted">Klicken, um zu erforschen.</p>`);
+      info.insertAdjacentHTML("beforeend", `<p class="muted">Antippen, um zu erforschen.</p>`);
     }
   }
 
-  // Input: wheel zooms at the cursor, drag pans, click selects.
-  let drag: { x: number; y: number; ox: number; oy: number; moved: boolean } | undefined;
+  // Input: wheel or pinch zooms, drag pans, a tap selects.
   canvas.addEventListener("wheel", (ev) => {
     ev.preventDefault();
     const px = ev.offsetX * dpr();
@@ -195,36 +195,25 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
     scale = next;
     dirty = true;
   }, { passive: false });
-  canvas.addEventListener("pointerdown", (ev) => {
-    drag = { x: ev.clientX, y: ev.clientY, ox, oy, moved: false };
-  });
-  canvas.addEventListener("pointermove", (ev) => {
-    if (drag && (drag.moved || Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 5)) {
-      drag.moved = true;
-      ox = drag.ox + (ev.clientX - drag.x) * dpr();
-      oy = drag.oy + (ev.clientY - drag.y) * dpr();
+  attachGestures(canvas, {
+    move(m) {
+      const d = dpr();
+      ({ scale, ox, oy } = applyMove({ scale, ox, oy }, { k: m.k, cx: m.cx * d, cy: m.cy * d, dx: m.dx * d, dy: m.dy * d }, 3, 120));
       dirty = true;
-      return;
-    }
-    const n = nodeAt(ev.offsetX * dpr(), ev.offsetY * dpr());
-    if (n !== hovered) {
-      hovered = n;
+    },
+    hover(p) {
+      const n = p && nodeAt(p.x * dpr(), p.y * dpr());
+      if (n !== hovered) {
+        hovered = n;
+        dirty = true;
+        renderInfo();
+      }
+    },
+    tap(p) {
+      selected = nodeAt(p.x * dpr(), p.y * dpr());
       dirty = true;
       renderInfo();
-    }
-  });
-  canvas.addEventListener("pointerup", (ev) => {
-    const moved = drag?.moved;
-    drag = undefined;
-    if (moved) return;
-    selected = nodeAt(ev.offsetX * dpr(), ev.offsetY * dpr());
-    dirty = true;
-    renderInfo();
-  });
-  canvas.addEventListener("pointerleave", () => {
-    hovered = undefined;
-    dirty = true;
-    renderInfo();
+    },
   });
   addEventListener("resize", () => {
     if (canvas.offsetParent) {

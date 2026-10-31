@@ -244,6 +244,12 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
   };
 }
 
+/** A bonus as the player reads it: bonuses add up (#19), so ×1.04 is "+4 %", ×0.95 is "−5 %". */
+function pct(mul: number): string {
+  const p = Math.round((mul - 1) * 1000) / 10;
+  return `${p >= 0 ? "+" : "−"}${Math.abs(p).toLocaleString("de-DE")} %`;
+}
+
 function escape(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
@@ -281,15 +287,15 @@ export function describe(e: Effect): string {
   switch (e.kind) {
     case "unlock": return `schaltet ${name} frei`;
     case "capacity": return `${name}: +${e.add} Stück`;
-    case "capacityMul": return `${name}: Anzahl ×${e.mul}`;
-    case "fireRate": return `${name}: Feuerrate ×${e.mul}`;
+    case "capacityMul": return `${name}: Anzahl ${pct(e.mul)}`;
+    case "fireRate": return `${name}: Feuerrate ${pct(e.mul)}`;
     case "range": return `${name}: Reichweite +${e.add}`;
-    case "damage": return `${name}: Schaden ×${e.mul}`;
-    case "turnRate": return `${name}: Schwenken ×${e.mul}`;
+    case "damage": return `${name}: Schaden ${pct(e.mul)}`;
+    case "turnRate": return `${name}: Schwenken ${pct(e.mul)}`;
     case "pattern": return `${name}: ${PATTERN_FIELDS[e.field]} +${e.add}`;
     case "abilityUnlock": return "Präzisionsschuss: Klick im Run trifft eine kleine Fläche";
-    case "abilityDamage": return `Präzisionsschuss: Schaden ×${e.mul}`;
+    case "abilityDamage": return `Präzisionsschuss: Schaden ${pct(e.mul)}`;
     case "abilityRadius": return `Präzisionsschuss: Fläche +${e.add}`;
-    case "abilityCooldown": return `Präzisionsschuss: Abklingzeit ×${e.mul}`;
+    case "abilityCooldown": return `Präzisionsschuss: Abklingzeit ${pct(e.mul)}`;
   }
 }

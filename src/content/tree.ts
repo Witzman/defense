@@ -103,7 +103,7 @@ export function buildTree(): ResearchNode[] {
     let prev: string = k;
     for (let s = 1; s <= 2; s++) {
       const r = ENTRY_RADIUS + ((CLUSTER_RADIUS - ENTRY_RADIUS) * s) / 3;
-      add({ id: `${k}-path-${s}`, name: `${t.name}: Grundlagen ${s}`, links: [], effects: [{ kind: "damage", turret: k, mul: 1.1 }], size: "small", cluster: k, x: Math.cos(a) * r, y: Math.sin(a) * r });
+      add({ id: `${k}-path-${s}`, name: `${t.name}: Grundlagen ${s}`, links: [], effects: [{ kind: "fireRate", turret: k, mul: 1.05 }], size: "small", cluster: k, x: Math.cos(a) * r, y: Math.sin(a) * r });
       link(prev, `${k}-path-${s}`);
       prev = `${k}-path-${s}`;
     }
@@ -128,7 +128,7 @@ export function buildTree(): ResearchNode[] {
           id,
           name: keystone ? `${t.name}: ${c.keystoneName}` : notable ? `${t.name}: ${c.notableName} ${s / 4}` : `${t.name}: ${c.name} ${s}`,
           links: [],
-          effects: keystone ? c.keystone : notable ? c.notable : c.small,
+          effects: keystone ? c.keystone : notable ? c.notable : s % 2 === 0 && c.smallAlt ? c.smallAlt : c.small,
           size: keystone ? "keystone" : notable ? "notable" : "small",
           cluster: k,
           x: cx + ux * d - uy * side,
@@ -270,8 +270,22 @@ interface Chain {
   keystoneName: string;
   length: number;
   small: Effect[];
+  /** Every second small node takes these instead, if set. */
+  smallAlt?: Effect[];
   notable: Effect[];
   keystone: Effect[];
+}
+
+/** A small step of area for a kind's pattern; kinds without area get fire rate (#21: throughput is the main axis). */
+function areaStep(k: TurretKind): Effect[] {
+  const p = turretType(k).pattern;
+  switch (p.kind) {
+    case "splash": return [{ kind: "pattern", turret: k, field: "radius", add: 0.08 }];
+    case "cone": return [{ kind: "pattern", turret: k, field: "angle", add: 3 }];
+    case "pierce": return [{ kind: "pattern", turret: k, field: "width", add: 0.04 }];
+    case "slow": return [{ kind: "pattern", turret: k, field: "seconds", add: 0.1 }];
+    default: return [{ kind: "fireRate", turret: k, mul: 1.04 }];
+  }
 }
 
 /** The chains of a turret cluster: the five stats every kind has, plus one for its weapon pattern. */
@@ -281,27 +295,28 @@ function CHAINS(k: TurretKind): Chain[] {
     const base = { id: "pattern", length: 12 };
     switch (p.kind) {
       case "splash":
-        return { ...base, name: "Sprengradius", notableName: "Druckwelle", keystoneName: "Flächenbrand", small: [{ kind: "pattern", turret: k, field: "radius", add: 0.08 }], notable: [{ kind: "pattern", turret: k, field: "radius", add: 0.4 }], keystone: [{ kind: "pattern", turret: k, field: "radius", add: 1.5 }, ...(p.burnSeconds ? [{ kind: "pattern" as const, turret: k, field: "burnSeconds" as const, add: 3 }] : [])] };
+        return { ...base, name: "Sprengradius", notableName: "Druckwelle", keystoneName: "Flächenbrand", small: [{ kind: "pattern", turret: k, field: "radius", add: 0.12 }], notable: [{ kind: "pattern", turret: k, field: "radius", add: 0.5 }], keystone: [{ kind: "pattern", turret: k, field: "radius", add: 1.5 }, ...(p.burnSeconds ? [{ kind: "pattern" as const, turret: k, field: "burnSeconds" as const, add: 3 }] : [])] };
       case "cone":
-        return { ...base, name: "Kegel", notableName: "Breitdüse", keystoneName: "Feuerwand", small: [{ kind: "pattern", turret: k, field: "angle", add: 3 }], notable: [{ kind: "pattern", turret: k, field: "burnSeconds", add: 1 }], keystone: [{ kind: "pattern", turret: k, field: "angle", add: 40 }] };
+        return { ...base, name: "Kegel", notableName: "Breitdüse", keystoneName: "Feuerwand", small: [{ kind: "pattern", turret: k, field: "angle", add: 4 }], notable: [{ kind: "pattern", turret: k, field: "burnSeconds", add: 1 }], keystone: [{ kind: "pattern", turret: k, field: "angle", add: 40 }] };
       case "chain":
-        return { ...base, name: "Leitung", notableName: "Überschlag", keystoneName: "Gewittersturm", small: [{ kind: "damage", turret: k, mul: 1.06 }], notable: [{ kind: "pattern", turret: k, field: "jumps", add: 1 }], keystone: [{ kind: "pattern", turret: k, field: "jumps", add: 4 }] };
+        return { ...base, name: "Leitung", notableName: "Überschlag", keystoneName: "Gewittersturm", small: [{ kind: "fireRate", turret: k, mul: 1.06 }], notable: [{ kind: "pattern", turret: k, field: "jumps", add: 1 }], keystone: [{ kind: "pattern", turret: k, field: "jumps", add: 4 }] };
       case "pierce":
-        return { ...base, name: "Projektilbreite", notableName: "Hohlladung", keystoneName: "Plasmalanze", small: [{ kind: "pattern", turret: k, field: "width", add: 0.03 }], notable: [{ kind: "pattern", turret: k, field: "width", add: 0.2 }], keystone: [{ kind: "pattern", turret: k, field: "width", add: 1 }] };
+        return { ...base, name: "Projektilbreite", notableName: "Hohlladung", keystoneName: "Plasmalanze", small: [{ kind: "pattern", turret: k, field: "width", add: 0.05 }], notable: [{ kind: "pattern", turret: k, field: "width", add: 0.2 }], keystone: [{ kind: "pattern", turret: k, field: "width", add: 1 }] };
       case "slow":
         return { ...base, name: "Kälte", notableName: "Tiefkühlung", keystoneName: "Permafrost", small: [{ kind: "pattern", turret: k, field: "seconds", add: 0.15 }], notable: [{ kind: "pattern", turret: k, field: "factor", add: 0.08 }], keystone: [{ kind: "pattern", turret: k, field: "radius", add: 1.5 }] };
       case "beam":
-        return { ...base, name: "Fokus", notableName: "Pulsfrequenz", keystoneName: "Dauerstrahl", small: [{ kind: "fireRate", turret: k, mul: 1.06 }], notable: [{ kind: "fireRate", turret: k, mul: 1.4 }], keystone: [{ kind: "fireRate", turret: k, mul: 5 }] };
+        return { ...base, name: "Fokus", notableName: "Pulsfrequenz", keystoneName: "Dauerstrahl", small: [{ kind: "fireRate", turret: k, mul: 1.06 }], notable: [{ kind: "fireRate", turret: k, mul: 1.4 }], keystone: [{ kind: "fireRate", turret: k, mul: 3 }] };
       case "single":
-        return { ...base, name: "Präzision", notableName: "Panzerbrechend", keystoneName: "Todesstoß", small: [{ kind: "damage", turret: k, mul: 1.07 }], notable: [{ kind: "damage", turret: k, mul: 1.5 }], keystone: [{ kind: "damage", turret: k, mul: 6 }] };
+        return { ...base, name: "Salve", notableName: "Panzerbrechend", keystoneName: "Sperrfeuer", small: [{ kind: "fireRate", turret: k, mul: 1.06 }], notable: [{ kind: "damage", turret: k, mul: 1.2 }], keystone: [{ kind: "fireRate", turret: k, mul: 2.5 }] };
     }
   })();
   return [
     { id: "cap", name: "Anzahl", notableName: "Nachschub", keystoneName: "Batterie", length: 12, small: [{ kind: "capacity", turret: k, add: 1 }], notable: [{ kind: "capacity", turret: k, add: 3 }], keystone: [{ kind: "capacityMul", turret: k, mul: 2 }] },
-    { id: "rate", name: "Feuerrate", notableName: "Schnellladung", keystoneName: "Overdrive", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.1 }], notable: [{ kind: "fireRate", turret: k, mul: 1.6 }], keystone: [{ kind: "fireRate", turret: k, mul: 8 }] },
+    { id: "rate", name: "Feuerrate", notableName: "Schnellladung", keystoneName: "Overdrive", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.1 }], notable: [{ kind: "fireRate", turret: k, mul: 1.6 }], keystone: [{ kind: "fireRate", turret: k, mul: 3 }] },
     patternChain,
-    { id: "dmg", name: "Schaden", notableName: "Hartkern", keystoneName: "Vernichter", length: 12, small: [{ kind: "damage", turret: k, mul: 1.12 }], notable: [{ kind: "damage", turret: k, mul: 1.7 }], keystone: [{ kind: "damage", turret: k, mul: 8 }] },
-    { id: "range", name: "Reichweite", notableName: "Weitsicht", keystoneName: "Horizont", length: 10, small: [{ kind: "range", turret: k, add: 0.2 }], notable: [{ kind: "range", turret: k, add: 1 }], keystone: [{ kind: "range", turret: k, add: 4 }] },
+    // #21: the mass scales, not the toughness — this chain feeds throughput; damage only at its milestones, moderate.
+    { id: "dmg", name: "Munition", notableName: "Hartkern", keystoneName: "Vernichter", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.04 }], notable: [{ kind: "damage", turret: k, mul: 1.15 }], keystone: [{ kind: "damage", turret: k, mul: 1.5 }, { kind: "capacity", turret: k, add: 2 }] },
+    { id: "range", name: "Reichweite", notableName: "Weitsicht", keystoneName: "Horizont", length: 10, small: [{ kind: "range", turret: k, add: 0.2 }], smallAlt: areaStep(k), notable: [{ kind: "range", turret: k, add: 1 }], keystone: [{ kind: "range", turret: k, add: 4 }] },
     { id: "turn", name: "Schwenken", notableName: "Servoantrieb", keystoneName: "Rundumblick", length: 8, small: [{ kind: "turnRate", turret: k, mul: 1.15 }], notable: [{ kind: "turnRate", turret: k, mul: 1.8 }], keystone: [{ kind: "turnRate", turret: k, mul: 4 }] },
   ];
 }
@@ -320,9 +335,10 @@ const allKinds = () => TURRET_TYPES.map((t) => t.id);
 const each = (kinds: TurretKind[], f: (k: TurretKind) => Effect) => kinds.map(f);
 
 const GLOBALS: GlobalTheme[] = [
-  { id: "ballistics", name: "Ballistik", keystoneName: "Uranmunition", small: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "damage", turret: k, mul: 1.05 })), notable: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "damage", turret: k, mul: 1.25 })), keystone: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "damage", turret: k, mul: 3 })) },
-  { id: "thermal", name: "Thermik", keystoneName: "Sonnenkern", small: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "damage", turret: k, mul: 1.05 })), notable: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "damage", turret: k, mul: 1.25 })), keystone: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "damage", turret: k, mul: 3 })) },
-  { id: "electrics", name: "Elektrik", keystoneName: "Supraleiter", small: () => each(kindsDealing(["electric"]), (k) => ({ kind: "damage", turret: k, mul: 1.08 })), notable: () => each(kindsDealing(["electric"]), (k) => ({ kind: "fireRate", turret: k, mul: 1.3 })), keystone: () => each(kindsDealing(["electric"]), (k) => ({ kind: "damage", turret: k, mul: 4 })) },
+  // #21: throughput first — fire rate and more turrets; damage only on the keystones, moderate.
+  { id: "ballistics", name: "Ballistik", keystoneName: "Uranmunition", small: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "fireRate", turret: k, mul: 1.03 })), notable: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "capacity", turret: k, add: 1 })), keystone: () => each(kindsDealing(["kinetic", "explosive"]), (k) => ({ kind: "damage", turret: k, mul: 1.5 })) },
+  { id: "thermal", name: "Thermik", keystoneName: "Sonnenkern", small: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "fireRate", turret: k, mul: 1.03 })), notable: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "capacity", turret: k, add: 1 })), keystone: () => each(kindsDealing(["fire", "energy"]), (k) => ({ kind: "damage", turret: k, mul: 1.5 })) },
+  { id: "electrics", name: "Elektrik", keystoneName: "Supraleiter", small: () => each(kindsDealing(["electric"]), (k) => ({ kind: "fireRate", turret: k, mul: 1.04 })), notable: () => each(kindsDealing(["electric"]), (k) => ({ kind: "pattern", turret: k, field: "jumps", add: 1 })), keystone: () => each(kindsDealing(["electric"]), (k) => ({ kind: "fireRate", turret: k, mul: 2 })) },
   { id: "cooling", name: "Kühlung", keystoneName: "Flüssigstickstoff", small: () => each(allKinds(), (k) => ({ kind: "fireRate", turret: k, mul: 1.03 })), notable: () => each(allKinds(), (k) => ({ kind: "fireRate", turret: k, mul: 1.15 })), keystone: () => each(allKinds(), (k) => ({ kind: "fireRate", turret: k, mul: 2 })) },
   { id: "optics", name: "Optik", keystoneName: "Satellitenaufklärung", small: () => each(allKinds(), (k) => ({ kind: "range", turret: k, add: 0.05 })), notable: () => each(allKinds(), (k) => ({ kind: "range", turret: k, add: 0.3 })), keystone: () => each(allKinds(), (k) => ({ kind: "range", turret: k, add: 1.5 })) },
   { id: "logistics", name: "Logistik", keystoneName: "Massenfertigung", small: () => each(allKinds(), (k) => ({ kind: "turnRate", turret: k, mul: 1.05 })), notable: () => each(allKinds(), (k) => ({ kind: "capacity", turret: k, add: 1 })), keystone: () => each(allKinds(), (k) => ({ kind: "capacityMul", turret: k, mul: 1.5 })) },

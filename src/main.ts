@@ -285,13 +285,17 @@ function renderResearch() {
   tree.open();
 }
 
+/** Game time per real second during a run. Owner, 2026-10-31: runs felt 10–20 % too slow. Changes only the pace, not
+ * the balance: the simulation still steps in fixed DT. */
+const GAME_SPEED = 1.15;
+
 let last = performance.now();
 let acc = 0;
 function frame(now: number) {
   const elapsed = Math.min(0.25, (now - last) / 1000);
   last = now;
   if (phase === "run") {
-    acc += elapsed;
+    acc += elapsed * GAME_SPEED;
     while (acc >= DT && world.status === "running") {
       step(world);
       acc -= DT;

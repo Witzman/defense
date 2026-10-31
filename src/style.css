@@ -21,3 +21,22 @@ button { font: inherit; color: var(--water); background: var(--accent); border: 
 button:disabled { opacity: 0.5; cursor: default; }
 #banner { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); padding: 16px 28px; background: var(--panel); border-radius: 10px; font-size: 28px; font-weight: 600; text-align: center; }
 #banner small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 6px; }
+.points strong { color: #f2c14e; }
+.save-state { font-size: 12px; color: var(--muted); min-width: 90px; }
+.save-state.failed { color: var(--goal); }
+button.ghost { background: transparent; color: var(--text); border: 1px solid #44506a; }
+#hint { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 14px; background: var(--panel); border-radius: 6px; color: var(--muted); }
+.panel { position: fixed; inset: 60px max(16px, calc(50% - 360px)) 80px; overflow: auto; background: rgba(10, 16, 32, 0.95); border: 1px solid #2a3550; border-radius: 12px; padding: 0 20px 20px; }
+.panel > header { position: sticky; top: 0; display: flex; align-items: center; gap: 16px; padding: 14px 0; background: inherit; }
+.panel h2 { margin: 0; font-size: 20px; flex: 1; }
+#levels { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+#levels button { width: 100%; padding: 16px 10px; text-align: left; color: var(--text); background: #1b2742; border: 1px solid #2f3d5e; }
+#levels button.current { border-color: var(--accent); }
+#levels button:disabled { opacity: 0.4; }
+#levels .state { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+#nodes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#nodes li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; background: #1b2742; border-radius: 8px; }
+#nodes li.owned { opacity: 0.55; }
+#nodes li.locked { opacity: 0.35; }
+#nodes .effect { color: var(--muted); font-size: 13px; }
+#nodes button { grid-row: span 2; min-width: 120px; }

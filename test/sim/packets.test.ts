@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAND, WATER, type GameMap } from "../../src/sim/map.ts";
-import { createWorld, remaining, runToEnd, step, type LevelDef } from "../../src/sim/world.ts";
+import { remaining, runToEnd, step} from "../../src/sim/world.ts";
+import { world, type TestLevel } from "./helpers.ts";
 
 function channel(width = 20): GameMap {
   const height = 3;
@@ -9,7 +10,7 @@ function channel(width = 20): GameMap {
   return { width, height, cells, spawn: { x: 0, y: 1 }, goal: { x: width - 1, y: 1 } };
 }
 
-function level(over: Partial<LevelDef["enemies"]> = {}, rest: Partial<LevelDef> = {}): LevelDef {
+function level(over: Partial<TestLevel["enemies"]> = {}, rest: Partial<TestLevel> = {}): TestLevel {
   return {
     map: channel(),
     enemies: { count: 100, perSecond: 50, hp: 2, speed: 4, packet: 10, ...over },
@@ -23,7 +24,7 @@ function level(over: Partial<LevelDef["enemies"]> = {}, rest: Partial<LevelDef> 
 
 describe("packets: one simulated blob stands for many enemies", () => {
   it("spawns the count in packets and counts remaining in enemies", () => {
-    const w = createWorld(level(), [], 1);
+    const w = world(level(), [], 1);
     expect(remaining(w)).toBe(100);
     for (let i = 0; i < 10; i++) step(w);
     expect(w.enemies.every((e) => e.size === 10)).toBe(true);
@@ -31,14 +32,14 @@ describe("packets: one simulated blob stands for many enemies", () => {
   });
 
   it("a packet at the goal takes one energy per enemy in it", () => {
-    const w = createWorld(level(), [], 1);
+    const w = world(level(), [], 1);
     runToEnd(w);
     expect(w.arrived).toBe(100);
     expect(w.energy).toBe(900);
   });
 
   it("damage kills members one by one, at hp per member", () => {
-    const w = createWorld(level({ count: 10, perSecond: 100, packet: 10, hp: 2, speed: 1 }), [{ x: 2, y: 0 }], 1);
+    const w = world(level({ count: 10, perSecond: 100, packet: 10, hp: 2, speed: 1 }), [{ x: 2, y: 0 }], 1);
     let shots = 0;
     while (w.status === "running" && w.killed < 3) {
       step(w);
@@ -50,13 +51,13 @@ describe("packets: one simulated blob stands for many enemies", () => {
   });
 
   it("the last packet is only as big as what is left", () => {
-    const w = createWorld(level({ count: 25, packet: 10 }), [], 1);
+    const w = world(level({ count: 25, packet: 10 }), [], 1);
     for (let i = 0; i < 60; i++) step(w);
     expect(w.enemies.map((e) => e.size).sort((a, b) => a - b)[0]).toBe(5);
   });
 
   it("a cell holds at most its capacity in enemies, not in packets", () => {
-    const w = createWorld(level({ count: 400, perSecond: 200, packet: 10, speed: 2 }, { cellCapacity: 20 }), [], 1);
+    const w = world(level({ count: 400, perSecond: 200, packet: 10, speed: 2 }, { cellCapacity: 20 }), [], 1);
     while (w.status === "running") {
       step(w);
       const load = new Map<number, number>();
@@ -70,7 +71,7 @@ describe("packets: one simulated blob stands for many enemies", () => {
   });
 
   it("is lost when energy runs out, even mid-packet", () => {
-    const w = createWorld(level({ packet: 10 }, { goalEnergy: 15 }), [], 1);
+    const w = world(level({ packet: 10 }, { goalEnergy: 15 }), [], 1);
     runToEnd(w);
     expect(w.status).toBe("lost");
     expect(w.energy).toBe(0);

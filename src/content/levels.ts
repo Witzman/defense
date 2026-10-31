@@ -7,8 +7,6 @@ export function level2(): LevelDef {
     map: generateMap({ width: 90, height: 58, seed: 2002 }),
     enemies: { count: 900, perSecond: 12, hp: 3, speed: 2.5 },
     goalEnergy: 40,
-    turret: { range: 5, damage: 1, shotsPerSecond: 6 },
-    capacity: 6,
     cellCapacity: 4,
   };
 }
@@ -19,8 +17,6 @@ export function level3(): LevelDef {
     map: generateMap({ width: 150, height: 96, seed: 3003 }),
     enemies: { count: 30000, perSecond: 250, hp: 3, speed: 3, packet: 10 },
     goalEnergy: 3000,
-    turret: { range: 7, damage: 10, shotsPerSecond: 20 },
-    capacity: 12,
     cellCapacity: 40,
   };
 }
@@ -33,7 +29,5 @@ export function level1(): LevelDef {
     map: generateMap({ width: 40, height: 26, seed: 1001 }),
     enemies: { count: 70, perSecond: 1.5, hp: 3, speed: 2 },
     goalEnergy: 10,
-    turret: { range: 4, damage: 1, shotsPerSecond: 3 },
-    capacity: 3,
   };
 }

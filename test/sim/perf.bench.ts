@@ -5,7 +5,7 @@ import { createWorld, step, type World } from "../../src/sim/world.ts";
 
 /** Level 3 after `seconds` of free flow: the real map, the real stream, no turrets. */
 function flowing(seconds: number): World {
-  const w = createWorld(level3(), [], 1);
+  const w = createWorld(level3(), { capacity: 0, turret: { range: 4, damage: 1, shotsPerSecond: 3 } }, [], 1);
   for (let i = 0; i < seconds * 30; i++) step(w);
   return w;
 }

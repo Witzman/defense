@@ -55,7 +55,8 @@ export function buy<T extends Wallet>(w: T, id: string, catalog: readonly Resear
 interface KindState {
   unlocked: boolean;
   capacity: number;
-  capacityMul: number;
+  /** Sum of (mul − 1) per multiplied value: bonuses add up (#19), so ten +20 % nodes give +200 %, not ×6.2. */
+  bonus: Record<"capacity" | "fireRate" | "damage" | "turnRate", number>;
   stats: TurretStats;
   pattern: Pattern;
 }
@@ -67,38 +68,49 @@ export function deriveArsenal(research: readonly string[], catalog: readonly Res
   const kind = (k: TurretKind) => {
     if (!kinds.has(k)) {
       const t = turretType(k);
-      kinds.set(k, { unlocked: false, capacity: 0, capacityMul: 1, stats: { ...t.base }, pattern: { ...t.pattern } });
+      kinds.set(k, { unlocked: false, capacity: 0, bonus: { capacity: 0, fireRate: 0, damage: 0, turnRate: 0 }, stats: { ...t.base }, pattern: { ...t.pattern } });
     }
     return kinds.get(k)!;
   };
   const effects: Effect[] = [];
   for (const id of research) effects.push(...(byId.get(id)?.effects ?? [])); // a save may name a node a later tree dropped
   const ability: Ability | undefined = effects.some((e) => e.kind === "abilityUnlock") ? { ...BASE_ABILITY } : undefined;
+  const abilityBonus = { damage: 0, cooldown: 0 };
   for (const e of effects) {
     switch (e.kind) {
       case "unlock": kind(e.turret).unlocked = true; break;
       case "capacity": kind(e.turret).capacity += e.add; break;
-      case "capacityMul": kind(e.turret).capacityMul *= e.mul; break;
-      case "fireRate": kind(e.turret).stats.shotsPerSecond *= e.mul; break;
+      case "capacityMul": kind(e.turret).bonus.capacity += e.mul - 1; break;
+      case "fireRate": kind(e.turret).bonus.fireRate += e.mul - 1; break;
       case "range": kind(e.turret).stats.range += e.add; break;
-      case "damage": kind(e.turret).stats.damage *= e.mul; break;
-      case "turnRate": kind(e.turret).stats.turnRate *= e.mul; break;
+      case "damage": kind(e.turret).bonus.damage += e.mul - 1; break;
+      case "turnRate": kind(e.turret).bonus.turnRate += e.mul - 1; break;
       case "pattern": addToPattern(kind(e.turret).pattern, e.field, e.add); break;
-      case "abilityDamage": if (ability) ability.damage *= e.mul; break;
+      case "abilityDamage": abilityBonus.damage += e.mul - 1; break;
       case "abilityRadius": if (ability) ability.radius += e.add; break;
-      case "abilityCooldown": if (ability) ability.cooldown *= e.mul; break;
+      case "abilityCooldown": abilityBonus.cooldown += e.mul - 1; break;
       case "abilityUnlock": break;
     }
+  }
+  if (ability) {
+    ability.damage *= factor(abilityBonus.damage);
+    ability.cooldown *= Math.max(MIN_COOLDOWN_FACTOR, 1 + abilityBonus.cooldown);
   }
   const turrets: Arsenal["turrets"] = {};
   for (const [k, v] of kinds) {
     if (!v.unlocked) continue;
-    turrets[k] = { capacity: Math.floor(v.capacity * v.capacityMul), stats: v.stats, pattern: v.pattern };
+    const stats = { ...v.stats, shotsPerSecond: v.stats.shotsPerSecond * factor(v.bonus.fireRate), damage: v.stats.damage * factor(v.bonus.damage), turnRate: v.stats.turnRate * factor(v.bonus.turnRate) };
+    turrets[k] = { capacity: Math.floor(v.capacity * factor(v.bonus.capacity)), stats, pattern: v.pattern };
   }
   return ability ? { turrets, ability } : { turrets };
 }
 
 /** Adds to a pattern field the pattern has; a field it lacks is ignored (a cone has no jumps). */
+/** Shortest cooldown research can reach, as a share of the base. */
+export const MIN_COOLDOWN_FACTOR = 0.25;
+/** A summed bonus as a factor; penalties never take a value below a tenth. */
+const factor = (bonus: number) => Math.max(0.1, 1 + bonus);
+
 function addToPattern(p: Pattern, field: PatternField, add: number) {
   const rec = p as unknown as Record<string, number | undefined>;
   if (field === "burnSeconds" && (p.kind === "splash" || p.kind === "cone")) {

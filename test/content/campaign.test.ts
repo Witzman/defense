@@ -68,6 +68,30 @@ describe("campaign", () => {
       }
     });
 
+    // #17: never only one way — even with the main route blocked wide — and spawns start far from goals, on the edge.
+    it("has a way around a main route blocked wide (radius 4)", () => {
+      for (const s of map.spawns) {
+        const cells = map.cells.slice();
+        for (const p of pathFrom(map, field, s)) {
+          if ([s, ...map.goals].some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 9)) continue;
+          for (let dy = -4; dy <= 4; dy++)
+            for (let dx = -4; dx <= 4; dx++) {
+              const x = p.x + dx;
+              const y = p.y + dy;
+              if (dx * dx + dy * dy <= 16 && x >= 0 && y >= 0 && x < map.width && y < map.height) cells[y * map.width + x] = LAND;
+            }
+        }
+        const blocked = distanceField({ ...map, cells }, map.goals)[s.y * map.width + s.x]!;
+        expect(blocked, `spawn ${s.x},${s.y}`).not.toBe(UNREACHABLE);
+      }
+    });
+
+    it("starts every spawn far from every goal, spawns and goals on the map's edge", () => {
+      for (const p of [...map.spawns, ...map.goals]) expect([0, map.width - 1].includes(p.x) || [0, map.height - 1].includes(p.y)).toBe(true);
+      for (const s of map.spawns)
+        for (const g of map.goals) expect(Math.hypot(s.x - g.x, s.y - g.y)).toBeGreaterThan(Math.max(map.width, map.height) * 0.35);
+    });
+
     it("has land and water in real shares, and shore to build on", () => {
       const land = map.cells.filter((c) => c === LAND).length / map.cells.length;
       expect(land).toBeGreaterThan(0.2);

@@ -1,4 +1,4 @@
-import { generateMap } from "../sim/map.ts";
+import { generateMap, type GameMap, type Layout } from "../sim/map.ts";
 import { BALANCE } from "./balance.ts";
 import { createRng } from "../sim/rng.ts";
 import type { EnemyGroup, LevelDef } from "../sim/world.ts";
@@ -6,17 +6,20 @@ import type { EnemyGroup, LevelDef } from "../sim/world.ts";
 /**
  * The campaign (#8): 25 levels from rules, each with a fixed seed, so a level is the same lake every time.
  * Numbers are tuned by the balancing simulation (G, #9); the shape of the curve is decided here:
- * - enemies ×1.6 per level for levels 1–4 (single blobs, the eye still counts), then ×1.475 up to ~1,000,000;
+ * - enemies 78 in level 1 (#17: the labyrinth gives turrets more time), ×1.6 per level for levels 1–4 (single blobs,
+ *   the eye still counts), then ×1.475 up to ~1,000,000;
  * - one blob stands for a packet sized to keep a level at ≤ 3,000 blobs; a cell holds three packets;
- * - spawns 1 → 4, goals 1 → 3 (late), maps 40 → 184 cells wide, rivers wider and lakes more open.
+ * - spawns 1 → 4, goals 1 → 3 (late), maps 40 → 184 cells wide, a labyrinth of channels with wider main arms.
  */
 export const LEVEL_COUNT = 25;
+
+const LAYOUTS: Layout[] = ["grid", "organic", "serpentine", "blocks"];
 
 /** Order in which enemy types join the campaign, one per level. */
 const TYPE_ORDER = ["green", "swarm", "armor", "ember", "shield", "rock"];
 
 export function enemyTotal(i: number): number {
-  return i < 4 ? Math.round(70 * 1.6 ** i) : Math.round(287 * 1.475 ** (i - 3));
+  return i < 4 ? Math.round(78 * 1.6 ** i) : Math.round(287 * 1.475 ** (i - 3));
 }
 
 /** Seconds the taps run: about a minute early, two and a half minutes at the end. */
@@ -24,23 +27,37 @@ function spawnSeconds(i: number): number {
   return BALANCE.spawnSecondsBase + i * BALANCE.spawnSecondsPerLevel;
 }
 
+/** Generated maps, kept: a labyrinth may take a second to draw on a slow device, and nothing changes a map's cells. */
+const maps = new Map<number, GameMap>();
+
 export function campaignLevel(i: number): LevelDef {
   const rng = createRng(90_000 + i * 7919);
   const width = 40 + i * 6;
   const height = Math.round(width * 0.65);
   const spawns = i < 3 ? 1 : i < 9 ? 2 : i < 17 ? 3 : 4;
   const goals = i < 15 ? 1 : i < 21 ? 2 : 3;
-  const map = generateMap({
+  // Labyrinth (#17): one of four layouts per level, the networks combined with lakes on some; mixed by a fixed seed.
+  const shape = createRng(5_000 + i * 7919);
+  const layout = LAYOUTS[shape.int(LAYOUTS.length)]!;
+  // Lakes would flood the small first maps: only from level 5 on.
+  const lakes = shape.next() < 0.45 && i >= 4 ? shape.range(0.25, 0.6) : 0;
+  const map = maps.get(i) ?? generateMap({
     width,
     height,
     seed: 1000 + i * 7919,
     spawns,
     goals,
-    paths: i < 9 ? 3 : 2,
-    riverWidth: 3 + Math.floor(i / 6),
-    openness: 0.05 + i * 0.012,
-    chokes: Math.max(0.05, 0.5 - i * 0.019),
+    layout,
+    lakes,
+    // Wide corridors and land as islands in the stream (owner's reference, #17): channels take most of the spacing.
+    spacing: 10 + i * 0.25,
+    // The first levels are small and close: narrower channels, growing to full width by level 7.
+    mainWidth: (10 + i * 0.25) * (0.5 + Math.min(i, 6) * 0.033),
+    sideWidth: (10 + i * 0.25) * (0.32 + Math.min(i, 6) * 0.03),
+    loops: 0.3,
+    chokes: 0.35,
   });
+  maps.set(i, map);
 
   const total = enemyTotal(i);
   const seconds = spawnSeconds(i);

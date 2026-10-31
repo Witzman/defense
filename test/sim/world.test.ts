@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAND, WATER, type GameMap } from "../../src/sim/map.ts";
-import { canPlace, remaining, runToEnd, step} from "../../src/sim/world.ts";
-import { world, type TestLevel } from "./helpers.ts";
+import { remaining, runToEnd, step} from "../../src/sim/world.ts";
+import { canPlaceCannon, world, type TestLevel } from "./helpers.ts";
 
 /** A straight channel along row 1 of a 20x3 map, land above and below. */
 function channel(): GameMap {
@@ -75,11 +75,11 @@ describe("turrets", () => {
 
   it("stand only on free land, up to the capacity", () => {
     const l = level();
-    expect(canPlace(l, l.capacity, [], { x: 3, y: 0 })).toBe(true);
-    expect(canPlace(l, l.capacity, [], { x: 3, y: 1 })).toBe(false);
-    expect(canPlace(l, l.capacity, [{ x: 3, y: 0 }], { x: 3, y: 0 })).toBe(false);
-    expect(canPlace(l, l.capacity, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }], { x: 5, y: 0 })).toBe(false);
-    expect(canPlace(l, l.capacity, [], { x: -1, y: 0 })).toBe(false);
+    expect(canPlaceCannon(l, [], { x: 3, y: 0 })).toBe(true);
+    expect(canPlaceCannon(l, [], { x: 3, y: 1 })).toBe(false);
+    expect(canPlaceCannon(l, [{ x: 3, y: 0 }], { x: 3, y: 0 })).toBe(false);
+    expect(canPlaceCannon(l, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }], { x: 5, y: 0 })).toBe(false);
+    expect(canPlaceCannon(l, [], { x: -1, y: 0 })).toBe(false);
   });
 
   it("do not save up shots while nothing is in range", () => {

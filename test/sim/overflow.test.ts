@@ -40,7 +40,7 @@ function detourShare(perSecond: number): number {
     step(w);
     for (const e of w.enemies) if (Math.floor(e.y) === 7) detoured.add(e.id);
   }
-  return detoured.size / w.level.enemies.count;
+  return detoured.size / 120;
 }
 
 describe("overflow", () => {

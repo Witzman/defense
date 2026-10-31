@@ -15,9 +15,17 @@ canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
 .bar { display: inline-block; width: 140px; height: 10px; background: #33384a; border-radius: 5px; vertical-align: middle; overflow: hidden; }
 #energy-fill { display: block; height: 100%; width: 100%; background: var(--goal); transition: width 0.2s; }
 #bar { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px; background: var(--panel); border-radius: 8px; }
-.slot { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; font-variant-numeric: tabular-nums; }
-.icon { width: 16px; height: 16px; border-radius: 50%; background: #2b2d42; box-shadow: 0 0 0 3px var(--text); }
-button { font: inherit; color: var(--water); background: var(--accent); border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+#palette { display: flex; gap: 6px; }
+.slot { --kind: var(--text); display: flex; gap: 8px; align-items: center; padding: 6px 10px; color: var(--text); background: transparent; border: 1px solid #44506a; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.slot.selected { border-color: var(--kind); box-shadow: 0 0 0 1px var(--kind) inset; }
+.symbol { color: var(--kind); font-size: 17px; line-height: 1; }
+#ability { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 14px; background: var(--panel); border-radius: 6px; color: var(--muted); }
+#ability.ready { color: #f2c14e; }
+.branch { list-style: none; }
+.branch h3 { margin: 18px 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
+.branch h3 small { color: var(--muted); font-weight: 400; }
+.branch ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+button { white-space: nowrap; font: inherit; color: var(--water); background: var(--accent); border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
 #banner { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); padding: 16px 28px; background: var(--panel); border-radius: 10px; font-size: 28px; font-weight: 600; text-align: center; }
 #banner small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 6px; }
@@ -35,8 +43,6 @@ button.ghost { background: transparent; color: var(--text); border: 1px solid #4
 #levels button:disabled { opacity: 0.4; }
 #levels .state { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
 #nodes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-#nodes li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; background: #1b2742; border-radius: 8px; }
-#nodes li.owned { opacity: 0.55; }
-#nodes li.locked { opacity: 0.35; }
-#nodes .effect { color: var(--muted); font-size: 13px; }
-#nodes button { grid-row: span 2; min-width: 120px; }
+.branch li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; background: #1b2742; border-radius: 8px; }
+.branch .effect { color: var(--muted); font-size: 13px; }
+.branch li button { grid-row: span 2; min-width: 120px; }

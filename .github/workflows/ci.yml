@@ -14,9 +14,37 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: defense
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: defense
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U defense -d defense"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: defense
+      PGPASSWORD: test
+      PGDATABASE: defense
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m unittest discover -s tests -t .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Container image builds
+        run: docker build -t defense:ci .
+      - name: Compose file is valid
+        run: POSTGRES_PASSWORD=ci docker compose -f compose.yaml config -q
 
   hygiene:
     runs-on: ubuntu-latest

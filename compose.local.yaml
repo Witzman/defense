@@ -1,0 +1,6 @@
+# Local only: publishes the game on http://localhost:3000 (APP_PORT changes the host port).
+# docker compose -f compose.yaml -f compose.local.yaml up --build
+services:
+  app:
+    ports:
+      - "${APP_PORT:-3000}:3000"

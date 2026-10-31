@@ -3,8 +3,22 @@
 Browser tower defense, single player. Enemies are colored blobs that flow through
 water from spawns to goals; turrets stand on islands.
 
-The repository currently holds the infrastructure: a Node server that serves the
-built game and stores the save game in Postgres, delivered with Docker Compose.
+Playable now: level 1 — place up to three turrets on land, start the run, win or lose.
+A Node server serves the built game and stores the save game in Postgres, delivered
+with Docker Compose.
+
+## Code
+
+| Where | What |
+|---|---|
+| `src/sim/` | deterministic simulation: seeded map generator, distance field, run rules (fixed step 1/30 s); no DOM, runs headless |
+| `src/content/` | level data |
+| `src/render/` | canvas view; reads the world, never changes it |
+| `src/main.ts` | page: preparation, run loop, HUD |
+| `server/` | HTTP server and Postgres store |
+
+Under a path prefix (Dokploy domain with path `/defense` and Strip Path on) the page
+works because every URL is relative; `/defense` redirects to `/defense/`.
 
 ## Run it
 

@@ -3,6 +3,7 @@
  * content/tree.ts; this module decides what can be bought and what the bought nodes add up to.
  */
 import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { BALANCE } from "../content/balance.ts";
 import { ROOT, TREE, type Effect, type PatternField, type ResearchNode } from "../content/tree.ts";
 import type { Ability, Arsenal } from "../sim/world.ts";
 
@@ -19,10 +20,12 @@ const MAX_SLOW = 0.9;
 
 const owns = (research: readonly string[], id: string) => id === ROOT || research.includes(id);
 
+/** A node's price now: its base cost, dearer per node of its group already owned, and with overall progress. */
 export function costOf(node: ResearchNode, research: readonly string[], catalog: readonly ResearchNode[] = CATALOG): number {
-  if (!node.group) return node.cost;
+  const progress = BALANCE.costProgressGrowth ** research.length;
+  if (!node.group) return Math.round(node.cost * progress);
   const owned = catalog.filter((n) => n.group?.id === node.group!.id && research.includes(n.id)).length;
-  return Math.round(node.cost * node.group.growth ** owned);
+  return Math.round(node.cost * node.group.growth ** owned * progress);
 }
 
 export interface Wallet {
@@ -30,10 +33,14 @@ export interface Wallet {
   research: string[];
 }
 
-/** Not owned, affordable, touching an owned node, and every required node owned. */
+/** Not owned, affordable, touching an owned node, every required node owned — and a turret first. */
 export function canBuy(w: Wallet, id: string, catalog: readonly ResearchNode[] = CATALOG): boolean {
   const node = catalog.find((n) => n.id === id);
   if (!node || owns(w.research, id)) return false;
+  // No softlock: until a turret is researched, points go to a turret. Spent elsewhere they could never come back,
+  // because a run without turrets earns nothing.
+  const unlocks = (n: ResearchNode | undefined) => n?.effects.some((e) => e.kind === "unlock") ?? false;
+  if (!unlocks(node) && !w.research.some((r) => unlocks(catalog.find((n) => n.id === r)))) return false;
   if (w.points < costOf(node, w.research, catalog)) return false;
   if (!node.links.some((l) => owns(w.research, l))) return false;
   return (node.requiresAll ?? []).every((r) => owns(w.research, r));

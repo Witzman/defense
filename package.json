@@ -12,7 +12,8 @@
     "build": "vite build",
     "start": "node server/main.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "balance": "vitest run --config vitest.balance.config.ts"
   },
   "dependencies": {
     "pg": "^8.23.1"

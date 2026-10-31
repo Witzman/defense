@@ -68,6 +68,14 @@ npm run build
 - Domain on service `app`, port `3000`.
 - The save game lives in the volume `pgdata`; it survives redeploys.
 
+## Balancing
+
+`src/balance/` plays the campaign headless with the game's own rules: it samples where the
+stream flows, places turrets greedily, spends research like one of four profiles (specialist,
+generalist, random, optimizer) and retries until it wins. `npm run balance` writes
+`balance/report.md` (`BALANCE_LEVELS`, `BALANCE_MAX_ATTEMPTS` set the scope); a quick part runs
+in `npm test`. The curves it tunes live in `src/content/balance.ts`.
+
 ## Server
 
 | Path | |

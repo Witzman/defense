@@ -1,3 +1,5 @@
+import { BALANCE } from "../content/balance.ts";
+
 /**
  * Research points for one run (#5):
  *
@@ -12,5 +14,5 @@ export function runPoints(levelIndex: number, killed: number, total: number): nu
 }
 
 export function valuePerKill(levelIndex: number): number {
-  return 1.5 ** levelIndex;
+  return BALANCE.killValueGrowth ** levelIndex;
 }

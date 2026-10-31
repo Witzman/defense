@@ -29,7 +29,7 @@ export const ENEMY_TYPES: readonly EnemyType[] = [
   { id: "ember", name: "Glut", color: "#f28c38", edge: "#b0561a", hp: 1.2, shield: 0, speed: 1, resist: { fire: 1 } },
   { id: "shield", name: "Schildträger", color: "#b388eb", edge: "#7a52b3", hp: 1, shield: 2, speed: 0.9, resist: {} },
   { id: "swarm", name: "Schwarm", color: "#f6e05e", edge: "#b7a02a", hp: 0.5, shield: 0, speed: 1.6, resist: {} },
-  { id: "rock", name: "Fels", color: "#9aa5b1", edge: "#5f6b78", hp: 4, shield: 0, speed: 0.6, resist: { explosive: 0.5, kinetic: 0.3 }, instantKillImmune: true },
+  { id: "rock", name: "Fels", color: "#9aa5b1", edge: "#5f6b78", hp: 2.5, shield: 0, speed: 0.6, resist: { explosive: 0.5, kinetic: 0.3 }, instantKillImmune: true },
 ];
 
 export function enemyType(id: string): EnemyType {

@@ -1,4 +1,5 @@
 import { generateMap } from "../sim/map.ts";
+import { BALANCE } from "./balance.ts";
 import { createRng } from "../sim/rng.ts";
 import type { EnemyGroup, LevelDef } from "../sim/world.ts";
 
@@ -20,7 +21,7 @@ export function enemyTotal(i: number): number {
 
 /** Seconds the taps run: about a minute early, two and a half minutes at the end. */
 function spawnSeconds(i: number): number {
-  return 50 + i * 4;
+  return BALANCE.spawnSecondsBase + i * BALANCE.spawnSecondsPerLevel;
 }
 
 export function campaignLevel(i: number): LevelDef {
@@ -66,7 +67,7 @@ export function campaignLevel(i: number): LevelDef {
   const packet = Math.max(1, Math.ceil(total / 3000));
   return {
     map,
-    enemies: { groups, hpScale: 3 * 1.08 ** i, speed: 2 + i * 0.06, packet },
+    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: 2 + i * 0.06, packet },
     goalEnergy: Math.max(10, Math.round((total * 0.12) / goals)),
     cellCapacity: 3 * packet,
   };

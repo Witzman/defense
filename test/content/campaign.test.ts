@@ -119,12 +119,26 @@ describe("campaign", () => {
     });
   });
 
-  it("grows from a handful to about a million enemies", () => {
+  // Owner's curve (#22): 80, 200, ~3,500 in level 5, ~100,000 in level 10, then ×1.5 per level.
+  it("grows from 80 to tens of millions on the owner's anchors", () => {
     const counts = levels.map(enemyCount);
     for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThan(counts[i - 1]!);
-    expect(counts[0]).toBeLessThan(100);
-    expect(counts[24]).toBeGreaterThan(500_000);
-    expect(counts[24]).toBeLessThanOrEqual(1_200_000);
+    expect(counts[0]).toBe(80);
+    expect(counts[1]).toBe(200);
+    expect(counts[4]).toBeGreaterThanOrEqual(2_000);
+    expect(counts[4]).toBeLessThanOrEqual(5_000);
+    expect(counts[9]).toBe(100_000);
+    expect(counts[24]).toBeGreaterThan(30_000_000);
+    expect(counts[24]).toBeLessThan(60_000_000);
+  });
+
+  it("keeps one pace for every level and lets 5 % through", () => {
+    expect(new Set(levels.map((l) => l.enemies.speed)).size).toBe(1);
+    for (const l of levels) expect(l.goalEnergy * l.map.goals.length).toBeCloseTo(enemyCount(l) * 0.05, -1);
+  });
+
+  it("does not put one type into every level once all are known", () => {
+    for (const t of ENEMY_TYPES) expect(levels.slice(6).every((l) => l.enemies.groups.some((g) => g.type === t.id)), t.id).toBe(false);
   });
 
   it("starts with one spawn and goal, adds spawns early and goals only late", () => {

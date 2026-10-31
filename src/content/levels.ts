@@ -6,8 +6,8 @@ import type { EnemyGroup, LevelDef } from "../sim/world.ts";
 /**
  * The campaign (#8): 25 levels from rules, each with a fixed seed, so a level is the same lake every time.
  * Numbers are tuned by the balancing simulation (G, #9); the shape of the curve is decided here:
- * - enemies 78 in level 1 (#17: the labyrinth gives turrets more time), ×1.6 per level for levels 1–4 (single blobs,
- *   the eye still counts), then ×1.475 up to ~1,000,000;
+ * - enemies from the owner's anchors (#22): 80, 200, ~3,500 in level 5, ~100,000 in level 10, then ×1.5 per level to
+ *   ~44 million; one pace for all levels; 5 % of a level's enemies may reach the goals;
  * - one blob stands for a packet sized to keep a level at ≤ 3,000 blobs; a cell holds three packets;
  * - spawns 1 → 4, goals 1 → 3 (late), maps 40 → 184 cells wide, a labyrinth of channels with wider main arms.
  */
@@ -18,11 +18,26 @@ const LAYOUTS: Layout[] = ["grid", "organic", "serpentine", "blocks"];
 /** Order in which enemy types join the campaign, one per level. */
 const TYPE_ORDER = ["green", "swarm", "armor", "ember", "shield", "rock"];
 
+/** Owner's anchors for the mass (#22): level index → enemies. Between them the count grows geometrically. */
+const MASS_ANCHORS: [number, number][] = [[0, 80], [1, 200], [4, 3_500], [9, 100_000]];
+/** Growth per level after the last anchor: level 25 ends near 44 million. */
+const MASS_GROWTH_LATE = 1.5;
+
 export function enemyTotal(i: number): number {
-  return i < 4 ? Math.round(78 * 1.6 ** i) : Math.round(287 * 1.475 ** (i - 3));
+  const last = MASS_ANCHORS[MASS_ANCHORS.length - 1]!;
+  if (i >= last[0]) return Math.round(last[1] * MASS_GROWTH_LATE ** (i - last[0]));
+  const k = MASS_ANCHORS.findIndex(([at]) => at > i);
+  const [i0, n0] = MASS_ANCHORS[k - 1]!;
+  const [i1, n1] = MASS_ANCHORS[k]!;
+  return Math.round(n0 * (n1 / n0) ** ((i - i0) / (i1 - i0)));
 }
 
-/** Seconds the taps run: about a minute early, two and a half minutes at the end. */
+/** Share of a level's enemies that may reach the goals before the run is lost (#22). */
+export const GOAL_TOLERANCE = 0.05;
+/** Cells per second for every level; only the enemy type changes it (#22: the mass scales, not the pace). */
+export const ENEMY_SPEED = 2;
+
+/** Seconds the taps run: 70 s in level 1, about 82 s in level 25. */
 function spawnSeconds(i: number): number {
   return BALANCE.spawnSecondsBase + i * BALANCE.spawnSecondsPerLevel;
 }
@@ -63,8 +78,9 @@ export function campaignLevel(i: number): LevelDef {
   const seconds = spawnSeconds(i);
   const available = TYPE_ORDER.slice(0, Math.min(TYPE_ORDER.length, i + 1));
   const kinds = i === 0 ? 1 : Math.min(available.length, 2 + Math.floor(i / 8));
-  // The newest type always shows up; the rest are drawn from what the player has met.
-  const types = [available[available.length - 1]!];
+  // While types are new, the newest always shows up; once all are known, the set type rotates (#22), so no type
+  // turns up in every level. The rest are drawn from what the player has met.
+  const types = [i < TYPE_ORDER.length ? available[available.length - 1]! : TYPE_ORDER[i % TYPE_ORDER.length]!];
   while (types.length < kinds) {
     const t = available[rng.int(available.length)]!;
     if (!types.includes(t)) types.push(t);
@@ -76,16 +92,16 @@ export function campaignLevel(i: number): LevelDef {
   const groups: EnemyGroup[] = weights.map((w, j) => {
     const count = j === groupCount - 1 ? left : Math.max(1, Math.round((total * w) / sum));
     left -= count;
-    // Groups open one after another so the colours arrive as separate streams.
-    const start = Math.round((seconds * 0.3 * j) / Math.max(1, groupCount - 1));
+    // Groups run in parallel (#22); a short head start keeps the colours apart as separate streams.
+    const start = Math.round((seconds * 0.1 * j) / Math.max(1, groupCount - 1));
     return { type: types[j % types.length]!, count, perSecond: count / (seconds - start), start, spawn: j % spawns };
   });
 
   const packet = Math.max(1, Math.ceil(total / 3000));
   return {
     map,
-    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: 2 + i * 0.06, packet },
-    goalEnergy: Math.max(10, Math.round((total * 0.12) / goals)),
+    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: ENEMY_SPEED, packet },
+    goalEnergy: Math.max(1, Math.round((total * GOAL_TOLERANCE) / goals)),
     cellCapacity: 3 * packet,
   };
 }

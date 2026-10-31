@@ -15,7 +15,10 @@ export const BALANCE = {
   costBase: 15,
   costDepthGrowth: 1.2,
   costProgressGrowth: 1.01,
-  /** Seconds the taps of a level run: base + perLevel × level. */
+  /**
+   * Seconds the taps of a level run: base + perLevel × level. Nearly the same in every level (owner, #22): a bigger
+   * mass comes at a higher rate and in parallel from every spawn, not over a longer time.
+   */
   spawnSecondsBase: 70,
-  spawnSecondsPerLevel: 4,
+  spawnSecondsPerLevel: 0.5,
 };

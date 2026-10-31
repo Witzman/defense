@@ -65,6 +65,30 @@ describe("research on the tree", () => {
     expect(deriveArsenal(["cannon", "rate1"], nodes).turrets.cannon!.stats.shotsPerSecond).toBeCloseTo(base.shotsPerSecond * 1.5);
   });
 
+  it("bonuses of the same stat add up instead of multiplying (#19)", () => {
+    const base = turretType("cannon").base;
+    const tree = [
+      ...nodes,
+      n("rate2", 30, ["rate1"], [{ kind: "fireRate", turret: "cannon", mul: 1.5 }]),
+      n("dmg1", 10, ["cannon"], [{ kind: "damage", turret: "cannon", mul: 1.2 }]),
+      n("dmg2", 10, ["cannon"], [{ kind: "damage", turret: "cannon", mul: 1.2 }]),
+      n("cap2x", 20, ["cap1"], [{ kind: "capacityMul", turret: "cannon", mul: 2 }]),
+    ];
+    const a = deriveArsenal(["cannon", "rate1", "rate2", "dmg1", "dmg2", "cap1", "capx2", "cap2x"], tree).turrets.cannon!;
+    expect(a.stats.shotsPerSecond).toBeCloseTo(base.shotsPerSecond * 2); // 1 + 0.5 + 0.5, not 2.25
+    expect(a.stats.damage).toBeCloseTo(base.damage * 1.4); // not 1.44
+    expect(a.capacity).toBe(9); // 3 × (1 + 1 + 1), not 3 × 4
+  });
+
+  it("cooldown reductions add up and stop at a floor", () => {
+    const tree = [...nodes, n("cd2", 10, ["cd"], [{ kind: "abilityCooldown", mul: 0.5 }]), n("cd3", 10, ["cd"], [{ kind: "abilityCooldown", mul: 0.5 }])];
+    const one = deriveArsenal(["ability", "cd"], tree).ability!.cooldown;
+    const three = deriveArsenal(["ability", "cd", "cd2", "cd3"], tree).ability!.cooldown;
+    const base = deriveArsenal(["ability"], tree).ability!.cooldown;
+    expect(one).toBeCloseTo(base * 0.5);
+    expect(three).toBeCloseTo(base * 0.25); // 1 − 1.5 would be negative: the floor holds
+  });
+
   it("pattern effects change the weapon's pattern", () => {
     const p = deriveArsenal(["mortar", "radius1"], nodes).turrets.mortar!.pattern;
     expect(p).toEqual({ ...turretType("mortar").pattern, radius: (turretType("mortar").pattern as { radius: number }).radius + 0.5 });

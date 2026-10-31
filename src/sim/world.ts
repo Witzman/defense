@@ -28,6 +28,8 @@ export interface EnemyGroup {
   perSecond: number;
   /** Seconds after the run starts that this group's tap opens. */
   start?: number;
+  /** Index of the spawn it flows out of (default 0). */
+  spawn?: number;
 }
 
 export interface LevelDef {
@@ -41,6 +43,7 @@ export interface LevelDef {
     /** Enemies one simulated blob stands for. 1 early on; large in mass levels, so the blob count stays bounded. */
     packet?: number;
   };
+  /** Energy of each goal at the start. */
   goalEnergy: number;
   /** Enemies one water cell holds. A full cell is not entered: the stream queues and spills, it never compresses. */
   cellCapacity?: number;
@@ -135,7 +138,12 @@ export interface World {
   rng: Rng;
   tick: number;
   status: Status;
-  energy: number;
+  /** Energy left per goal. */
+  energies: number[];
+  /** Sum over the goals. */
+  readonly energy: number;
+  /** Goal index per cell, -1 where there is none. */
+  goalAt: Int16Array;
   /** Enemies not spawned yet. */
   toSpawn: number;
   nextId: number;
@@ -188,14 +196,18 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     arsenal,
     packet: Math.max(1, Math.floor(level.enemies.packet ?? 1)),
     cellCapacity: level.cellCapacity ?? 3,
-    field: distanceField(level.map, level.map.goal),
+    field: distanceField(level.map, level.map.goals),
     density: new Float64Array(level.map.cells.length),
     congestion: new Float32Array(level.map.cells.length),
     groups,
     rng: createRng(seed),
     tick: 0,
     status: "running",
-    energy: level.goalEnergy,
+    energies: level.map.goals.map(() => level.goalEnergy),
+    get energy() {
+      return this.energies.reduce((a, b) => a + b, 0);
+    },
+    goalAt: goalIndex(level.map),
     toSpawn: groups.reduce((n, g) => n + g.left, 0),
     nextId: 0,
     enemies: [],
@@ -206,7 +218,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     arrived: 0,
     abilityReadyTick: 0,
     get perfect() {
-      return this.status === "won" && this.energy === this.level.goalEnergy;
+      return this.status === "won" && this.energies.every((e) => e === this.level.goalEnergy);
     },
     hit: (e, amount, type) => hit(w, e, amount, type),
     splash: (x, y, r, amount, type) => {
@@ -243,6 +255,12 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     w.place(p);
   }
   return w;
+}
+
+function goalIndex(map: GameMap): Int16Array {
+  const at = new Int16Array(map.cells.length).fill(-1);
+  map.goals.forEach((g, i) => (at[g.y * map.width + g.x] = i));
+  return at;
 }
 
 /** Enemies not spawned yet plus the ones in the water. */
@@ -337,8 +355,9 @@ function burn(w: World) {
 // --- spawning and flow ----------------------------------------------------------------------------------
 
 function spawn(w: World) {
-  const { spawn: at } = w.level.map;
+  const { spawns } = w.level.map;
   for (const g of w.groups) {
+    const at = spawns[g.group.spawn ?? 0] ?? spawns[0]!;
     if (g.left === 0 || w.tick < g.startTick) continue;
     g.debt += g.group.perSecond * DT;
     while (g.left > 0 && g.debt >= Math.min(w.packet, g.left)) {
@@ -361,7 +380,7 @@ function reroute(w: World) {
     w.congestion[i] = c;
     cost[i] = 1 + CONGESTION_COST * c;
   }
-  w.field = distanceField(w.level.map, w.level.map.goal, cost);
+  w.field = distanceField(w.level.map, w.level.map.goals, cost);
 }
 
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [
@@ -382,12 +401,13 @@ function move(w: World) {
     const ci = cy * map.width + cx;
     const here = w.field[ci]!;
     if (here === 0) {
+      const goal = Math.max(0, w.goalAt[ci]!);
       w.density[ci]! -= e.size;
       w.active -= e.size;
       w.arrived += e.size;
-      w.energy -= e.size;
-      if (w.energy <= 0) {
-        w.energy = 0;
+      w.energies[goal]! -= e.size;
+      if (w.energies[goal]! <= 0) {
+        w.energies[goal] = 0;
         w.status = "lost";
       }
       continue;

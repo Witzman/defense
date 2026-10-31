@@ -9,7 +9,7 @@ function channel(): GameMap {
   const height = 3;
   const cells = new Uint8Array(width * height).fill(LAND);
   for (let x = 0; x < width; x++) cells[width + x] = WATER;
-  return { width, height, cells, spawn: { x: 0, y: 1 }, goal: { x: width - 1, y: 1 } };
+  return { width, height, cells, spawns: [{ x: 0, y: 1 }], goals: [{ x: width - 1, y: 1 }] };
 }
 
 function level(over: Partial<TestLevel> = {}): TestLevel {
@@ -120,5 +120,5 @@ function tall(): GameMap {
   const height = 7;
   const cells = new Uint8Array(width * height).fill(LAND);
   for (let x = 0; x < width; x++) cells[6 * width + x] = WATER;
-  return { width, height, cells, spawn: { x: 0, y: 6 }, goal: { x: width - 1, y: 6 } };
+  return { width, height, cells, spawns: [{ x: 0, y: 6 }], goals: [{ x: width - 1, y: 6 }] };
 }

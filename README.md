@@ -3,7 +3,8 @@
 Browser tower defense, single player. Enemies are colored blobs that flow through
 water from spawns to goals; turrets stand on islands.
 
-Playable now: the core loop over levels 1–3, from single blobs to a stream of 30,000. A new
+Playable now: a campaign of 25 levels (`src/content/levels.ts`), from 70 single blobs to about
+a million enemies, from one spawn and goal to four spawns and three goals. A new
 game starts without turrets and with research points; research unlocks and strengthens the
 cannon, every run (won or lost) earns points, a win opens the next level. Progress is saved
 on the server after every run, purchase and start. Mouse wheel zooms, dragging pans, `0`

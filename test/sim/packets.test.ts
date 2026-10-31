@@ -7,7 +7,7 @@ function channel(width = 20): GameMap {
   const height = 3;
   const cells = new Uint8Array(width * height).fill(LAND);
   for (let x = 0; x < width; x++) cells[width + x] = WATER;
-  return { width, height, cells, spawn: { x: 0, y: 1 }, goal: { x: width - 1, y: 1 } };
+  return { width, height, cells, spawns: [{ x: 0, y: 1 }], goals: [{ x: width - 1, y: 1 }] };
 }
 
 function level(over: Partial<TestLevel["enemies"]> = {}, rest: Partial<TestLevel> = {}): TestLevel {

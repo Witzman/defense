@@ -2,7 +2,8 @@ import { enemyCount, LEVELS } from "./content/levels.ts";
 import { TURRET_TYPES, turretType, type TurretKind } from "./content/turrets.ts";
 import { createSaver, loadSave } from "./game/api.ts";
 import { runPoints } from "./game/points.ts";
-import { buy, canBuy, CATALOG, costOf, deriveArsenal, type Effect, type ResearchNode } from "./game/research.ts";
+import { buy, canBuy, deriveArsenal } from "./game/research.ts";
+import { createTreeView } from "./ui/treeView.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -216,7 +217,7 @@ function updateHud() {
   hint.hidden = !(phase === "prepare" && (noTurret || placements.length === 0));
   hint.textContent = noTurret
     ? "Noch kein Geschütz – erforsche zuerst eins."
-    : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–5 wählt die Art";
+    : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–9 wählt die Art";
 }
 
 function finish() {
@@ -248,8 +249,8 @@ $("campaign-open").addEventListener("click", () => {
 $("research-open").addEventListener("click", () => {
   if (phase === "run") return;
   closePanels();
-  renderResearch();
   $("research").hidden = false;
+  renderResearch();
 });
 
 function renderCampaign() {
@@ -272,66 +273,15 @@ function renderCampaign() {
   );
 }
 
-function describe(e: Effect): string {
-  switch (e.kind) {
-    case "unlock": return `schaltet ${turretType(e.turret).name} frei`;
-    case "capacity": return `+${e.add} ${turretType(e.turret).name}`;
-    case "fireRate": return `Feuerrate ×${e.mul}`;
-    case "range": return `Reichweite +${e.add}`;
-    case "damage": return `Schaden ×${e.mul}`;
-    case "turnRate": return `Schwenkgeschwindigkeit ×${e.mul}`;
-    case "abilityUnlock": return "Klick im Run trifft eine kleine Fläche";
-    case "abilityDamage": return `Schaden ×${e.mul}`;
-    case "abilityRadius": return `Fläche +${e.add}`;
-    case "abilityCooldown": return `Abklingzeit ×${e.mul}`;
-  }
-}
-
-/** Branch a node belongs to, for grouping: the turret kind, or the ability. */
-function branchOf(n: ResearchNode): string {
-  return n.id.split("-")[0]!;
-}
+const tree = createTreeView($<HTMLCanvasElement>("tree"), $("node-info"), () => save, (id) => {
+  if (!canBuy(save, id)) return;
+  commit(buy(save, id));
+  if (phase === "prepare") rebuildWorld();
+}, fmt);
 
 function renderResearch() {
   $("research-points").textContent = fmt.format(Math.floor(save.points));
-  const branches = [...TURRET_TYPES.map((t) => t.id as string), "ability"];
-  const sections = branches.map((b) => {
-    const nodes = CATALOG.filter((n) => branchOf(n) === b);
-    const owned = nodes.filter((n) => save.research.includes(n.id)).length;
-    // Only what can be bought now (or soon): the owned and the far-off would bury it.
-    const open = nodes.filter((n) => !save.research.includes(n.id) && n.requires.every((r) => save.research.includes(r)));
-    const section = document.createElement("li");
-    section.className = "branch";
-    const t = b === "ability" ? undefined : turretType(b as TurretKind);
-    const head = document.createElement("h3");
-    head.innerHTML = `${t ? `<span class="symbol" style="color:${t.color}">${t.symbol}</span> ${t.name}` : "Präzisionsschuss"} <small>${owned}/${nodes.length} erforscht</small>`;
-    const list = document.createElement("ul");
-    list.replaceChildren(
-      ...open.map((n) => {
-        const li = document.createElement("li");
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = `◆ ${fmt.format(costOf(n, save.research))}`;
-        btn.disabled = !canBuy(save, n.id);
-        btn.addEventListener("click", () => {
-          if (!canBuy(save, n.id)) return;
-          commit(buy(save, n.id));
-          if (phase === "prepare") rebuildWorld();
-          renderResearch();
-        });
-        const name = document.createElement("strong");
-        name.textContent = n.name;
-        const effect = document.createElement("span");
-        effect.className = "effect";
-        effect.textContent = n.effects.map(describe).join(", ");
-        li.append(name, btn, effect);
-        return li;
-      }),
-    );
-    section.append(head, list);
-    return section;
-  });
-  $("nodes").replaceChildren(...sections);
+  tree.open();
 }
 
 let last = performance.now();
@@ -379,8 +329,8 @@ async function boot() {
   selected = unlockedKinds()[0];
   openLevel(Math.min(save.unlockedLevel, LEVELS.length - 1));
   if (unlockedKinds().length === 0) {
-    renderResearch();
     $("research").hidden = false;
+    renderResearch();
   }
   requestAnimationFrame(frame);
 }

@@ -1,10 +1,16 @@
 import { TURRET_TYPES, type TurretKind } from "../content/turrets.ts";
 import type { Placement } from "../sim/world.ts";
 import { runPoints } from "./points.ts";
-import { START_POINTS } from "./research.ts";
+import { CATALOG, START_POINTS } from "./research.ts";
 
 /** Bump when the shape changes, and teach parseSave to read the old one. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
+
+/**
+ * Version 1 came before the research tree (#7). Its research ids the tree still knows are kept; every other one
+ * is refunded with this many points, so a player loses nothing they paid for.
+ */
+export const LEGACY_REFUND = 50;
 
 export interface LevelProgress {
   won: boolean;
@@ -30,7 +36,7 @@ export function emptySave(): Save {
 export function parseSave(raw: unknown): Save {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("save is not an object");
   const r = raw as Record<string, unknown>;
-  if (r.version !== SAVE_VERSION) throw new Error(`unknown save version ${String(r.version)}`);
+  if (r.version !== SAVE_VERSION && r.version !== 1) throw new Error(`unknown save version ${String(r.version)}`);
   if (typeof r.points !== "number" || !Number.isFinite(r.points)) throw new Error("save without points");
   if (!Array.isArray(r.research)) throw new Error("save without research");
   const levels: Record<number, LevelProgress> = {};
@@ -46,10 +52,18 @@ export function parseSave(raw: unknown): Save {
       };
     }
   }
+  let research = r.research.filter((x): x is string => typeof x === "string");
+  let points = r.points;
+  if (r.version === 1) {
+    const known = new Set(CATALOG.map((n) => n.id));
+    const kept = research.filter((id) => known.has(id));
+    points += (research.length - kept.length) * LEGACY_REFUND;
+    research = kept;
+  }
   return {
     version: SAVE_VERSION,
-    points: r.points,
-    research: r.research.filter((x): x is string => typeof x === "string"),
+    points,
+    research,
     unlockedLevel: Number.isInteger(r.unlockedLevel) && (r.unlockedLevel as number) >= 0 ? (r.unlockedLevel as number) : 0,
     levels,
   };

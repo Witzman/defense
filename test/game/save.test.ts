@@ -14,27 +14,35 @@ describe("save game", () => {
   });
 
   it("rejects what is not a save", () => {
-    for (const bad of [null, 3, [], { version: 1 }, { version: 99, points: 1 }, { version: 1, points: "x", research: [] }])
+    for (const bad of [null, 3, [], { version: 2 }, { version: 99, points: 1 }, { version: 2, points: "x", research: [] }])
       expect(() => parseSave(bad)).toThrow();
   });
 
+  it("a version 1 save keeps the research the tree still has and refunds the rest", async () => {
+    const { LEGACY_REFUND } = await import("../../src/game/save.ts");
+    const s = parseSave({ version: 1, points: 5, research: ["cannon", "cannon-old-node", "mortar-gone"] });
+    expect(s.version).toBe(SAVE_VERSION);
+    expect(s.research).toEqual(["cannon"]);
+    expect(s.points).toBe(5 + 2 * LEGACY_REFUND);
+  });
+
   it("fills fields a save from an older build lacks", () => {
-    expect(parseSave({ version: 1, points: 5, research: ["cannon"] })).toMatchObject({ points: 5, research: ["cannon"], unlockedLevel: 0, levels: {} });
+    expect(parseSave({ version: 2, points: 5, research: ["cannon"] })).toMatchObject({ points: 5, research: ["cannon"], unlockedLevel: 0, levels: {} });
   });
 
   it("reads placements of builds before turret kinds as cannons facing east, full circle", () => {
-    const s = parseSave({ version: 1, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }] } } });
+    const s = parseSave({ version: 2, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }] } } });
     expect(s.levels[0]!.placements).toEqual([{ x: 1, y: 2, kind: "cannon", facing: 0, arc: 360 }]);
   });
 
   it("keeps kind, facing and arc of a placement", () => {
     const p = { x: 1, y: 2, kind: "laser", facing: 90, arc: 120 };
-    const s = parseSave({ version: 1, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [p, { x: 3, y: 3, kind: "nonsense" }] } } });
+    const s = parseSave({ version: 2, points: 5, research: [], levels: { "0": { won: false, perfect: false, placements: [p, { x: 3, y: 3, kind: "nonsense" }] } } });
     expect(s.levels[0]!.placements).toEqual([p]);
   });
 
   it("drops malformed placements instead of failing the whole save", () => {
-    const s = parseSave({ version: 1, points: 5, research: [], unlockedLevel: 0, levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }, { x: "a" }] } } });
+    const s = parseSave({ version: 2, points: 5, research: [], unlockedLevel: 0, levels: { "0": { won: false, perfect: false, placements: [{ x: 1, y: 2 }, { x: "a" }] } } });
     expect(s.levels[0]!.placements).toEqual([{ x: 1, y: 2, kind: "cannon", facing: 0, arc: 360 }]);
   });
 });

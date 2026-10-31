@@ -48,7 +48,8 @@ export interface LevelDef {
 
 /** What research gives the player for a run: per turret kind how many may stand and how strong each is. */
 export interface Arsenal {
-  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats }>>;
+  /** Per kind: how many may stand, how strong each is, and the weapon pattern as research changed it. */
+  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats; pattern?: Pattern }>>;
   ability?: Ability;
 }
 
@@ -80,7 +81,10 @@ export interface Enemy {
   hp: number;
   shield: number;
   hpEach: number;
+  /** Cells per second now; baseSpeed while not slowed. */
   speed: number;
+  baseSpeed: number;
+  slowUntil: number;
   burnDps: number;
   burnUntil: number;
 }
@@ -213,7 +217,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       const e: Enemy = {
         id: w.nextId++, type, x, y, px: x, py: y, size,
         hp: size * t.hp * hpScale, shield: size * t.shield * hpScale, hpEach: t.hp * hpScale,
-        speed: level.enemies.speed * t.speed, burnDps: 0, burnUntil: 0,
+        speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0,
       };
       w.enemies.push(e);
       w.active += size;
@@ -226,7 +230,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       const type = turretType(p.kind);
       const facing = rad(p.facing ?? 0);
       w.turrets.push({
-        placement: p, kind: p.kind, stats: kind.stats, pattern: type.pattern, damageType: type.damageType,
+        placement: p, kind: p.kind, stats: kind.stats, pattern: kind.pattern ?? type.pattern, damageType: type.damageType,
         x: p.x + 0.5, y: p.y + 0.5, facing, arc: rad(p.arc ?? 360), aim: facing,
         ready: Math.max(0, 1 - kind.stats.shotsPerSecond * DT),
       });
@@ -372,6 +376,7 @@ function move(w: World) {
   for (const e of w.enemies) {
     e.px = e.x;
     e.py = e.y;
+    if (e.slowUntil < w.tick) e.speed = e.baseSpeed;
     const cx = Math.floor(e.x);
     const cy = Math.floor(e.y);
     const ci = cy * map.width + cx;
@@ -492,7 +497,13 @@ function fire(w: World) {
         fireSingle(w, t, target, shots);
         break;
       case "splash":
-        fireSplash(w, t, target, shots, t.pattern.radius);
+        fireSplash(w, t, target, shots, t.pattern.radius, t.pattern.burnSeconds);
+        break;
+      case "pierce":
+        firePierce(w, t, target, shots, t.pattern.width);
+        break;
+      case "slow":
+        fireSlow(w, t, target, shots, t.pattern);
         break;
       case "beam":
         fireBeam(w, t, target, shots);
@@ -519,7 +530,7 @@ function fireSingle(w: World, t: Turret, first: Enemy, shots: number) {
   }
 }
 
-function fireSplash(w: World, t: Turret, first: Enemy, shots: number, radius: number) {
+function fireSplash(w: World, t: Turret, first: Enemy, shots: number, radius: number, burnSeconds?: number) {
   // Many shells per tick become a few impacts carrying their share of the damage.
   const impacts = Math.min(shots, 32);
   const each = (shots * t.stats.damage) / impacts;
@@ -527,9 +538,50 @@ function fireSplash(w: World, t: Turret, first: Enemy, shots: number, radius: nu
   for (let i = 0; i < impacts && target; i++) {
     const { x, y } = target;
     w.splash(x, y, radius, each, t.damageType);
+    if (burnSeconds) ignite(w, x, y, radius, t.stats.damage * t.stats.shotsPerSecond, burnSeconds);
     if (i < TRACERS) w.shots.push({ kind: "blast", at: { x, y }, radius, turret: t.kind });
     if (target.size <= 0) target = nearest(w, t);
   }
+}
+
+/** Sets everything around a point burning (fire bombs). */
+function ignite(w: World, x: number, y: number, radius: number, dps: number, seconds: number) {
+  for (const e of w.enemies) {
+    if (e.size <= 0 || (e.x - x) ** 2 + (e.y - y) ** 2 > radius * radius) continue;
+    if (vulnerability(enemyType(e.type), "fire") === 0) continue;
+    e.burnDps = Math.max(e.burnDps, dps);
+    e.burnUntil = Math.max(e.burnUntil, w.tick + Math.round(seconds / DT));
+  }
+}
+
+/** One slug through everything on the line from the turret past the target, out to full range. */
+function firePierce(w: World, t: Turret, first: Enemy, shots: number, width: number) {
+  const dx = first.x - t.x;
+  const dy = first.y - t.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const damage = shots * t.stats.damage;
+  for (const e of w.enemies) {
+    if (e.size <= 0) continue;
+    const along = (e.x - t.x) * ux + (e.y - t.y) * uy;
+    if (along < 0 || along > t.stats.range) continue;
+    const across = Math.abs((e.x - t.x) * uy - (e.y - t.y) * ux);
+    if (across <= width) hit(w, e, damage, t.damageType);
+  }
+  w.shots.push({ kind: "tracer", from: { x: t.x, y: t.y }, to: { x: t.x + ux * t.stats.range, y: t.y + uy * t.stats.range }, turret: t.kind });
+}
+
+/** A cold burst: a little damage and everything around the target slowed for a while. */
+function fireSlow(w: World, t: Turret, first: Enemy, shots: number, p: { radius: number; factor: number; seconds: number }) {
+  const { x, y } = first;
+  w.splash(x, y, p.radius, shots * t.stats.damage, t.damageType);
+  for (const e of w.enemies) {
+    if (e.size <= 0 || (e.x - x) ** 2 + (e.y - y) ** 2 > p.radius * p.radius) continue;
+    e.speed = Math.min(e.speed, e.baseSpeed * (1 - p.factor));
+    e.slowUntil = w.tick + Math.round(p.seconds / DT);
+  }
+  w.shots.push({ kind: "blast", at: { x, y }, radius: p.radius, turret: t.kind });
 }
 
 function fireBeam(w: World, t: Turret, first: Enemy, shots: number) {

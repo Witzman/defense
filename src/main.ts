@@ -254,6 +254,21 @@ $("research-open").addEventListener("click", () => {
   renderResearch();
 });
 
+/** Starts over from an empty save: research, points, levels and placements are gone. Asks first. */
+$("new-game").addEventListener("click", () => {
+  if (phase === "run") return;
+  if (!confirm("Neues Spiel starten? Forschung, Punkte, Level und Aufstellungen werden gelöscht.")) return;
+  closePanels();
+  selected = undefined;
+  draft = { facing: 0, arc: 360 };
+  commit(emptySave());
+  openLevel(0);
+  if (unlockedKinds().length === 0) {
+    $("research").hidden = false;
+    renderResearch();
+  }
+});
+
 function renderCampaign() {
   $("levels").replaceChildren(
     ...LEVELS.map((_, i) => {

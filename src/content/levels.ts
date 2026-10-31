@@ -67,7 +67,7 @@ export function campaignLevel(i: number): LevelDef {
   const packet = Math.max(1, Math.ceil(total / 3000));
   return {
     map,
-    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: 2 + i * 0.06, packet },
+    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i * (BALANCE.levelHp[i] ?? 1), speed: 2 + i * 0.06, packet },
     goalEnergy: Math.max(10, Math.round((total * 0.12) / goals)),
     cellCapacity: 3 * packet,
   };

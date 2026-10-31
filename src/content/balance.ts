@@ -1,3 +1,5 @@
+import { LEVEL_HP } from "./levelHp.ts";
+
 /**
  * The curves balancing turns (#9). Every number here is checked by the balancing simulation
  * (`npm run balance`, report in balance/report.md); change them there, not where they are used.
@@ -12,6 +14,12 @@ export const BALANCE = {
   costBase: 15,
   costDepthGrowth: 1.2,
   costProgressGrowth: 1.01,
+  /**
+   * Per-level factor on hit points, fitted by `npm run calibrate` (src/balance/calibrate.ts) so a typical player needs
+   * about ten failed runs per level (#2, #11). The smooth curve above sets the shape; this corrects what the map,
+   * the enemy mix and the tree make of it. Missing entries count as 1.
+   */
+  levelHp: [...LEVEL_HP],
   /** Seconds the taps of a level run: base + perLevel × level. */
   spawnSecondsBase: 70,
   spawnSecondsPerLevel: 4,

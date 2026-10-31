@@ -13,7 +13,8 @@
     "start": "node server/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "balance": "vitest run --config vitest.balance.config.ts"
+    "balance": "vitest run --config vitest.balance.config.ts",
+    "calibrate": "BALANCE_RUN=test/balance/calibrate.run.ts vitest run --config vitest.balance.config.ts"
   },
   "dependencies": {
     "pg": "^8.23.1"

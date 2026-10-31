@@ -4,6 +4,7 @@ import { createSaver, loadSave } from "./game/api.ts";
 import { runPoints } from "./game/points.ts";
 import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
+import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -53,6 +54,7 @@ function commit(next: Save) {
   if (canStore) saver.save(save);
   renderPalette();
   updateHud();
+  if (level) renderTools();
 }
 
 const unlockedKinds = () => TURRET_TYPES.map((t) => t.id).filter((k) => arsenal.turrets[k]);
@@ -69,7 +71,9 @@ function openLevel(i: number) {
   placements = [];
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
   attempt = 0;
+  picked = undefined;
   terrain = drawTerrain(level.map, 24);
+  renderPalette(); // its rows decide how much room the map gets
   fit();
   $("level").textContent = String(i + 1);
   prepare();
@@ -79,8 +83,14 @@ function openLevel(i: number) {
 function fit() {
   canvas.width = Math.round(innerWidth * dpr());
   canvas.height = Math.round(innerHeight * dpr());
-  fitted = fitView(level.map, canvas.width, canvas.height - 120 * dpr());
-  fitted.oy += 50 * dpr();
+  // Room for HUD (top), bar (bottom, one or two rows) and the tool column (right; mirrored left so the lake stays centred).
+  const d = dpr();
+  const side = 76 * d;
+  const top = ($("hud").getBoundingClientRect().bottom + 8) * d;
+  const bottom = (innerHeight - $("bar").getBoundingClientRect().top + 8) * d;
+  fitted = fitView(level.map, canvas.width - 2 * side, canvas.height - top - bottom);
+  fitted.ox += side;
+  fitted.oy += top;
   view = { ...fitted };
 }
 addEventListener("resize", () => level && fit());
@@ -94,6 +104,7 @@ function prepare() {
   startButton.disabled = false;
   renderPalette();
   updateHud();
+  renderTools();
 }
 
 startButton.addEventListener("click", () => {
@@ -103,6 +114,7 @@ startButton.addEventListener("click", () => {
     phase = "run";
     startButton.disabled = true;
     closePanels();
+    renderTools();
     commit(setPlacements(save, levelIndex, placements));
   } else if (phase === "over") {
     prepare();
@@ -110,48 +122,101 @@ startButton.addEventListener("click", () => {
 });
 nextButton.addEventListener("click", () => openLevel(levelIndex + 1));
 
-const cellAtEvent = (ev: MouseEvent) => screenToCell(view, ev.clientX * dpr(), ev.clientY * dpr());
-const mapAtEvent = (ev: MouseEvent) => ({ x: (ev.clientX * dpr() - view.ox) / view.scale, y: (ev.clientY * dpr() - view.oy) / view.scale });
+const toCell = (p: Pt) => screenToCell(view, p.x * dpr(), p.y * dpr());
+const toMap = (p: Pt) => ({ x: (p.x * dpr() - view.ox) / view.scale, y: (p.y * dpr() - view.oy) / view.scale });
 const placedAt = (c: Point) => placements.findIndex((p) => p.x === c.x && p.y === c.y);
+/** Touch has no hover (#15): a tapped turret is picked, and the turret tools turn, narrow or remove it. */
+let picked: Placement | undefined;
+const coarse = matchMedia("(pointer: coarse)").matches;
 
-// Camera: wheel zooms at the cursor; dragging pans. A short press without movement is a click.
-let drag: { x: number; y: number; ox: number; oy: number; moved: boolean } | undefined;
+// Camera: wheel or pinch zooms, dragging pans; a press without movement is a tap.
 canvas.addEventListener("wheel", (ev) => {
   ev.preventDefault();
   view = zoomAt(view, ev.clientX * dpr(), ev.clientY * dpr(), Math.exp(-ev.deltaY * 0.0015), fitted.scale * 0.5, 64 * dpr());
 }, { passive: false });
-canvas.addEventListener("pointerdown", (ev) => {
-  drag = { x: ev.clientX, y: ev.clientY, ox: view.ox, oy: view.oy, moved: false };
+attachGestures(canvas, {
+  move(m) {
+    const d = dpr();
+    view = applyMove(view, { k: m.k, cx: m.cx * d, cy: m.cy * d, dx: m.dx * d, dy: m.dy * d }, fitted.scale * 0.5, 64 * d);
+    cursor = undefined;
+  },
+  hover(p) {
+    cursor = p && toCell(p);
+  },
+  tap(p, ev) {
+    if (phase === "run") {
+      const m = toMap(p);
+      useAbility(world, m.x, m.y);
+      return;
+    }
+    if (phase !== "prepare") return;
+    const touch = ev.pointerType !== "mouse";
+    const cell = toCell(p);
+    const i = placedAt(cell);
+    if (i >= 0 && touch) {
+      picked = picked === placements[i] ? undefined : placements[i];
+    } else if (i >= 0) {
+      if (placements[i] === picked) picked = undefined;
+      placements.splice(i, 1);
+    } else if (selected && canPlace(level, arsenal, placements, { ...cell, kind: selected })) {
+      const placed: Placement = { ...cell, kind: selected, ...draft };
+      placements.push(placed);
+      if (touch) picked = placed;
+    } else {
+      picked = undefined;
+      renderTools();
+      return;
+    }
+    rebuildWorld();
+    renderPalette();
+    updateHud();
+    renderTools();
+  },
 });
-canvas.addEventListener("pointermove", (ev) => {
-  if (drag && (drag.moved || Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 5)) {
-    drag.moved = true;
-    view = { ...view, ox: drag.ox + (ev.clientX - drag.x) * dpr(), oy: drag.oy + (ev.clientY - drag.y) * dpr() };
-  }
-  cursor = drag?.moved ? undefined : cellAtEvent(ev);
-});
-canvas.addEventListener("pointerleave", () => (cursor = undefined));
-canvas.addEventListener("pointerup", (ev) => {
-  const wasDrag = drag?.moved;
-  drag = undefined;
-  if (wasDrag) return;
-  if (phase === "run") {
-    const p = mapAtEvent(ev);
-    useAbility(world, p.x, p.y);
-    return;
-  }
-  if (phase !== "prepare") return;
-  const cell = cellAtEvent(ev);
-  const i = placedAt(cell);
-  if (i >= 0) placements.splice(i, 1);
-  else if (selected && canPlace(level, arsenal, placements, { ...cell, kind: selected })) placements.push({ ...cell, kind: selected, ...draft });
-  else return;
+
+/** What the turret tools act on: the picked turret, else the next one placed. */
+const toolTarget = (): { facing?: number; arc?: number } => (picked && placements.includes(picked) ? picked : draft);
+function turn(t: { facing?: number; arc?: number }, by: number) {
+  t.facing = ((((t.facing ?? 0) + by) % 360) + 360) % 360;
+  toolDone(t);
+}
+function narrow(t: { facing?: number; arc?: number }) {
+  t.arc = ARCS[(ARCS.indexOf(t.arc ?? 360) + 1) % ARCS.length];
+  toolDone(t);
+}
+function toolDone(t: { facing?: number; arc?: number }) {
+  if (t !== draft) draft = { facing: t.facing ?? 0, arc: t.arc ?? 360 };
+  rebuildWorld();
+  renderTools();
+}
+function renderTools() {
+  const show = phase === "prepare" && unlockedKinds().length > 0;
+  $("turret-tools").hidden = !show;
+  if (!show) return;
+  const t = toolTarget();
+  $("tools-label").textContent = t === draft ? "Neues" : "Gewählt";
+  $("arc").textContent = `${t.arc ?? 360}°`;
+  $<HTMLButtonElement>("remove").disabled = t === draft;
+}
+$("turn-left").addEventListener("click", () => phase === "prepare" && turn(toolTarget(), -45));
+$("turn-right").addEventListener("click", () => phase === "prepare" && turn(toolTarget(), 45));
+$("arc").addEventListener("click", () => phase === "prepare" && narrow(toolTarget()));
+$("remove").addEventListener("click", () => {
+  const i = picked ? placements.indexOf(picked) : -1;
+  if (phase !== "prepare" || i < 0) return;
+  placements.splice(i, 1);
+  picked = undefined;
   rebuildWorld();
   renderPalette();
   updateHud();
+  renderTools();
 });
+$("fit").addEventListener("click", () => (view = { ...fitted }));
+if (coarse) document.querySelector("#research .legend")!.textContent = "Zwei Finger zoomen · Ziehen verschiebt · gelber Rand = kaufbar";
+// Safari zooms the whole page on a pinch unless told not to.
+document.addEventListener("gesturestart", (ev) => ev.preventDefault());
 
-/** R turns the turret under the cursor (or the next one placed) by 45°, A narrows its swivel arc. */
+/** R turns the turret under the cursor (or the picked one, or the next one placed) by 45°, A narrows its swivel arc. */
 addEventListener("keydown", (ev) => {
   if (ev.key === "0" || ev.key === "Home") view = { ...fitted };
   if (ev.key === "Escape") closePanels();
@@ -159,11 +224,9 @@ addEventListener("keydown", (ev) => {
   const key = ev.key.toLowerCase();
   if (key !== "r" && key !== "a") return;
   const i = cursor ? placedAt(cursor) : -1;
-  const target = i >= 0 ? placements[i]! : draft;
-  if (key === "r") target.facing = (((target.facing ?? 0) + (ev.shiftKey ? -45 : 45)) % 360 + 360) % 360;
-  else target.arc = ARCS[(ARCS.indexOf(target.arc ?? 360) + 1) % ARCS.length];
-  if (i >= 0) draft = { facing: target.facing ?? 0, arc: target.arc ?? 360 };
-  rebuildWorld();
+  const target = i >= 0 ? placements[i]! : toolTarget();
+  if (key === "r") turn(target, ev.shiftKey ? -45 : 45);
+  else narrow(target);
 });
 // Number keys pick a turret kind from the bar.
 addEventListener("keydown", (ev) => {
@@ -211,14 +274,16 @@ function updateHud() {
   ability.hidden = !arsenal.ability || phase !== "run";
   if (arsenal.ability && phase === "run") {
     const wait = Math.max(0, (world.abilityReadyTick - world.tick) * DT);
-    ability.textContent = wait > 0 ? `Präzisionsschuss ${wait.toFixed(1)} s` : "Präzisionsschuss bereit – Klick ins Wasser";
+    ability.textContent = wait > 0 ? `Präzisionsschuss ${wait.toFixed(1)} s` : `Präzisionsschuss bereit – ${coarse ? "Tippen" : "Klick"} ins Wasser`;
     ability.classList.toggle("ready", wait === 0);
   }
   const noTurret = unlockedKinds().length === 0;
   hint.hidden = !(phase === "prepare" && (noTurret || placements.length === 0));
   hint.textContent = noTurret
     ? "Noch kein Geschütz – erforsche zuerst eins."
-    : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–9 wählt die Art";
+    : coarse
+      ? "Tippen auf Land setzt ein Geschütz · antippen wählt es · rechts drehen, Bereich, entfernen · zwei Finger zoomen"
+      : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–9 wählt die Art";
 }
 
 function finish() {
@@ -234,6 +299,7 @@ function finish() {
   startButton.textContent = "Nächster Run";
   startButton.disabled = false;
   nextButton.hidden = !(won && levelIndex + 1 < LEVELS.length);
+  renderTools();
 }
 
 // Panels.
@@ -328,6 +394,9 @@ function frame(now: number) {
       const p: Placement = { ...cursor, kind: selected, ...draft };
       hover = { placement: p, valid: canPlace(level, arsenal, placements, p), range: arsenal.turrets[selected]!.stats.range, existing: false };
     }
+  }
+  if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
+    hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
   drawWorld(g, view, terrain, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare" });
   requestAnimationFrame(frame);

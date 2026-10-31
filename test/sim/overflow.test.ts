@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAND, WATER, type GameMap } from "../../src/sim/map.ts";
-import { createWorld, runToEnd, step, type LevelDef } from "../../src/sim/world.ts";
+import { runToEnd, step} from "../../src/sim/world.ts";
+import { world, type TestLevel } from "./helpers.ts";
 
 /**
  * Two routes from spawn (left) to goal (right):
@@ -21,7 +22,7 @@ function twoRoutes(): GameMap {
   return { width, height, cells, spawn: { x: 0, y: 1 }, goal: { x: width - 1, y: 1 } };
 }
 
-function level(perSecond: number): LevelDef {
+function level(perSecond: number): TestLevel {
   return {
     map: twoRoutes(),
     enemies: { count: 120, perSecond, hp: 1, speed: 3 },
@@ -33,7 +34,7 @@ function level(perSecond: number): LevelDef {
 
 /** Share of enemies that ever touched the detour row. */
 function detourShare(perSecond: number): number {
-  const w = createWorld(level(perSecond), [], 1);
+  const w = world(level(perSecond), [], 1);
   const detoured = new Set<number>();
   while (w.status === "running") {
     step(w);
@@ -52,7 +53,7 @@ describe("overflow", () => {
   });
 
   it("never packs more enemies into a cell than it holds", () => {
-    const w = createWorld(level(40), [], 1);
+    const w = world(level(40), [], 1);
     while (w.status === "running") {
       step(w);
       const count = new Map<number, number>();
@@ -67,7 +68,7 @@ describe("overflow", () => {
   });
 
   it("still delivers every enemy", () => {
-    const w = createWorld(level(40), [], 1);
+    const w = world(level(40), [], 1);
     runToEnd(w);
     expect(w.status).toBe("won");
     expect(w.arrived).toBe(120);

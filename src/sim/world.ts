@@ -2,6 +2,12 @@ import { cellAt, LAND, type GameMap, type Point } from "./map.ts";
 import { distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 
+/** What the player brings into a run, from research: how many turrets may stand and how strong each is. */
+export interface Arsenal {
+  capacity: number;
+  turret: { range: number; damage: number; shotsPerSecond: number };
+}
+
 /** Simulation step in seconds. Fixed, so a run with the same seed replays exactly. */
 export const DT = 1 / 30;
 
@@ -29,9 +35,6 @@ export interface LevelDef {
     packet?: number;
   };
   goalEnergy: number;
-  turret: { range: number; damage: number; shotsPerSecond: number };
-  /** Turrets the player may place. */
-  capacity: number;
   /** Enemies one water cell holds. A full cell is not entered: the stream queues and spills, it never compresses. */
   cellCapacity?: number;
 }
@@ -65,6 +68,7 @@ export type Status = "running" | "won" | "lost";
 
 export interface World {
   level: LevelDef;
+  arsenal: Arsenal;
   packet: number;
   cellCapacity: number;
   /** Route cost to the goal per cell, including congestion. 0 at the goal. */
@@ -91,23 +95,24 @@ export interface World {
   readonly perfect: boolean;
 }
 
-export function canPlace(level: LevelDef, placed: readonly Point[], p: Point): boolean {
+export function canPlace(level: LevelDef, capacity: number, placed: readonly Point[], p: Point): boolean {
   if (cellAt(level.map, p.x, p.y) !== LAND) return false;
   if (p.x < 0 || p.y < 0 || p.x >= level.map.width || p.y >= level.map.height) return false;
   if (placed.some((q) => q.x === p.x && q.y === p.y)) return false;
-  return placed.length < level.capacity;
+  return placed.length < capacity;
 }
 
-export function createWorld(level: LevelDef, placements: readonly Point[], seed: number): World {
+export function createWorld(level: LevelDef, arsenal: Arsenal, placements: readonly Point[], seed: number): World {
   const turrets: Turret[] = [];
   const placed: Point[] = [];
   for (const p of placements) {
-    if (!canPlace(level, placed, p)) throw new Error(`invalid placement ${p.x},${p.y}`);
+    if (!canPlace(level, arsenal.capacity, placed, p)) throw new Error(`invalid placement ${p.x},${p.y}`);
     placed.push(p);
     turrets.push({ cell: { x: p.x, y: p.y }, cooldown: 0 });
   }
   return {
     level,
+    arsenal,
     packet: Math.max(1, Math.floor(level.enemies.packet ?? 1)),
     cellCapacity: level.cellCapacity ?? 3,
     field: distanceField(level.map, level.map.goal),
@@ -258,7 +263,7 @@ function laneY(id: number): number {
 }
 
 function fire(w: World) {
-  const { range, damage, shotsPerSecond } = w.level.turret;
+  const { range, damage, shotsPerSecond } = w.arsenal.turret;
   const hpEach = w.level.enemies.hp;
   for (const t of w.turrets) {
     t.cooldown -= DT;

@@ -18,15 +18,31 @@
       <span>Level <strong id="level">1</strong></span>
       <span>Verbleibend <strong id="remaining">0</strong></span>
       <span class="energy">Ziel <span class="bar"><span id="energy-fill"></span></span> <strong id="energy">100 %</strong></span>
+      <span class="points" title="Forschungspunkte">◆ <strong id="points">0</strong></span>
+      <span id="save-state" class="save-state"></span>
     </header>
     <div id="banner" hidden></div>
+    <p id="hint" hidden></p>
     <footer id="bar">
-      <span class="slot" title="Geschütz: Klick auf Land setzt, Klick auf ein Geschütz entfernt">
+      <button id="campaign-open" type="button" class="ghost" title="Kampagne">☰</button>
+      <span class="slot" title="Kanone: Klick auf Land setzt, Klick auf ein Geschütz entfernt">
         <span class="icon"></span><span id="capacity">0/0</span>
       </span>
       <button id="start" type="button">Run starten</button>
+      <button id="research-open" type="button" class="ghost">Forschen</button>
       <button id="next" type="button" hidden>Nächstes Level</button>
     </footer>
+
+    <section id="campaign" class="panel" hidden>
+      <header><h2>Kampagne</h2><button type="button" class="ghost close" data-close>✕</button></header>
+      <ol id="levels"></ol>
+    </section>
+
+    <section id="research" class="panel" hidden>
+      <header><h2>Forschung</h2><span class="points">◆ <strong id="research-points">0</strong></span><button type="button" class="ghost close" data-close>✕</button></header>
+      <ul id="nodes"></ul>
+    </section>
+
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

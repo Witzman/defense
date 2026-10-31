@@ -3,9 +3,11 @@
 Browser tower defense, single player. Enemies are colored blobs that flow through
 water from spawns to goals; turrets stand on islands.
 
-Playable now: levels 1–3, from single blobs to a stream of 30,000 — place turrets on land,
-start the run, win or lose. Mouse wheel zooms, dragging pans, `0` resets the view.
-`?level=N` opens a level directly (development shortcut until the campaign exists).
+Playable now: the core loop over levels 1–3, from single blobs to a stream of 30,000. A new
+game starts without turrets and with research points; research unlocks and strengthens the
+cannon, every run (won or lost) earns points, a win opens the next level. Progress is saved
+on the server after every run, purchase and start. Mouse wheel zooms, dragging pans, `0`
+resets the view.
 
 Enemies flow, they are not pushed: every water cell holds at most `cellCapacity` enemies, a full
 cell is not entered, and congestion raises the route cost so the stream spills into other
@@ -20,6 +22,7 @@ with Docker Compose.
 |---|---|
 | `src/sim/` | deterministic simulation: seeded map generator, distance field, run rules (fixed step 1/30 s); no DOM, runs headless |
 | `src/content/` | level data |
+| `src/game/` | research (nodes, effects, loadout), points formula, save game (versioned, validated), server client |
 | `src/render/` | canvas view; reads the world, never changes it |
 | `src/main.ts` | page: preparation, run loop, HUD |
 | `server/` | HTTP server and Postgres store |

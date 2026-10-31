@@ -98,12 +98,17 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, terrain: HTML
   g.drawImage(terrain, ox, oy, map.width * s, map.height * s);
   const at = (x: number, y: number) => [ox + x * s, oy + y * s] as const;
 
-  // Spawn and goal.
+  // Spawns and goals; a goal fades as its energy drains. Markers keep a minimum size so they read from afar.
+  const marker = Math.max(s, 6);
   g.fillStyle = COLORS.spawn;
-  disc(g, ...at(map.spawn.x + 0.5, map.spawn.y + 0.5), s * 0.6);
+  for (const p of map.spawns) disc(g, ...at(p.x + 0.5, p.y + 0.5), marker * 0.6);
   const pulse = 1 + 0.08 * Math.sin(time * 4);
-  g.fillStyle = COLORS.goal;
-  polygon(g, ...at(map.goal.x + 0.5, map.goal.y + 0.5), s * 1.1 * pulse, 8);
+  map.goals.forEach((p, i) => {
+    g.globalAlpha = 0.35 + 0.65 * Math.max(0, w.energies[i]! / w.level.goalEnergy);
+    g.fillStyle = COLORS.goal;
+    polygon(g, ...at(p.x + 0.5, p.y + 0.5), marker * 1.1 * pulse, 8);
+    g.globalAlpha = 1;
+  });
 
   // Enemies: one by one up close, a smooth density field from afar, both in between.
   const blobs = Math.min(1, Math.max(0, (s - FIELD_SCALE) / (BLOB_SCALE - FIELD_SCALE)));

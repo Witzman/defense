@@ -19,7 +19,7 @@ function twoRoutes(): GameMap {
     water(28, y);
   }
   for (let x = 1; x <= 28; x++) water(x, 7);
-  return { width, height, cells, spawn: { x: 0, y: 1 }, goal: { x: width - 1, y: 1 } };
+  return { width, height, cells, spawns: [{ x: 0, y: 1 }], goals: [{ x: width - 1, y: 1 }] };
 }
 
 function level(perSecond: number): TestLevel {

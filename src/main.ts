@@ -201,9 +201,10 @@ function renderPalette() {
 function updateHud() {
   if (!world) return;
   $("remaining").textContent = fmt.format(remaining(world));
-  const pct = Math.max(0, Math.round((world.energy / level.goalEnergy) * 100));
-  $("energy").textContent = `${pct} %`;
-  $("energy-fill").style.width = `${pct}%`;
+  // One goal: its share. Several: each one, and the bar shows the weakest — that is the one that loses the run.
+  const pcts = world.energies.map((e) => Math.max(0, Math.round((e / level.goalEnergy) * 100)));
+  $("energy").textContent = pcts.length === 1 ? `${pcts[0]} %` : `${pcts.join(" · ")} %`;
+  $("energy-fill").style.width = `${Math.min(...pcts)}%`;
   $("points").textContent = fmt.format(Math.floor(save.points));
   $("research-points").textContent = fmt.format(Math.floor(save.points));
   const ability = $("ability");
@@ -225,9 +226,9 @@ function finish() {
   const won = world.status === "won";
   const earned = runPoints(levelIndex, world.killed, total);
   commit(recordRun(save, levelIndex, { status: won ? "won" : "lost", killed: world.killed, total, perfect: world.perfect }, LEVELS.length));
-  const pct = Math.round((world.energy / level.goalEnergy) * 100);
+  const pct = Math.round((Math.min(...world.energies) / level.goalEnergy) * 100);
   banner.innerHTML = won
-    ? `${world.perfect ? "Perfect Clear" : "Sieg"}<small>Ziel bei ${pct} % · +${fmt.format(earned)} ◆</small>`
+    ? `${world.perfect ? "Perfect Clear" : "Sieg"}<small>${world.energies.length > 1 ? "schwächstes Ziel" : "Ziel"} bei ${pct} % · +${fmt.format(earned)} ◆</small>`
     : `Niederlage<small>${fmt.format(world.killed)} von ${fmt.format(total)} besiegt · +${fmt.format(earned)} ◆</small>`;
   banner.hidden = false;
   startButton.textContent = "Nächster Run";

@@ -9,7 +9,7 @@ function lake(): GameMap {
   const height = 9;
   const cells = new Uint8Array(width * height).fill(WATER);
   for (let x = 0; x < width; x++) cells[x] = LAND;
-  return { width, height, cells, spawn: { x: 0, y: 4 }, goal: { x: width - 1, y: 4 } };
+  return { width, height, cells, spawns: [{ x: 0, y: 4 }], goals: [{ x: width - 1, y: 4 }] };
 }
 
 function level(type: string, count = 1, over: Partial<LevelDef["enemies"]> & { perSecond?: number } = {}): LevelDef {

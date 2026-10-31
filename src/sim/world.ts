@@ -365,7 +365,9 @@ function spawn(w: World) {
       g.debt -= size;
       g.left -= size;
       w.toSpawn -= size;
-      w.spawnBlob(g.group.type, size, at.x + 0.5 + w.rng.range(-0.3, 0.3), at.y + 0.5 + w.rng.range(-0.3, 0.3));
+      const pos = { x: at.x + 0.5 + w.rng.range(-0.3, 0.3), y: at.y + 0.5 + w.rng.range(-0.3, 0.3) };
+      offShore(w.level.map, pos);
+      w.spawnBlob(g.group.type, size, pos.x, pos.y);
     }
   }
 }
@@ -421,6 +423,8 @@ function move(w: World) {
       const ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
       const ni = ny * map.width + nx;
+      // A diagonal step needs water on both sides, or the blob cuts across an island corner (#11).
+      if (dx !== 0 && dy !== 0 && (map.cells[cy * map.width + nx] === LAND || map.cells[ny * map.width + cx] === LAND)) continue;
       const d = w.field[ni]!;
       if (d < best && fits(ni, e.size)) {
         best = d;
@@ -436,6 +440,7 @@ function move(w: World) {
       const k = Math.min(1, (e.speed * DT) / len);
       e.x += vx * k;
       e.y += vy * k;
+      offShore(map, e);
       const ni = Math.floor(e.y) * map.width + Math.floor(e.x);
       if (ni !== ci && !fits(ni, e.size)) {
         // The step grazed a full cell on the way (diagonal or overshoot): stay put this tick.
@@ -449,6 +454,22 @@ function move(w: World) {
     survivors.push(e);
   }
   w.enemies = survivors;
+}
+
+/**
+ * How close a blob may come to a cell edge that borders land (#11): a drawn blob has a radius of 0.3 cells and the
+ * drawn shore reaches 0.12 cells into the water cell (render/canvas.ts), so the two only touch.
+ */
+export const SHORE_GAP = 0.42;
+
+/** Pushes a blob off the shore of its cell, so it never overlaps an island on screen. Stays in its cell. */
+function offShore(map: GameMap, e: { x: number; y: number }) {
+  const cx = Math.floor(e.x);
+  const cy = Math.floor(e.y);
+  if (cellAt(map, cx - 1, cy) === LAND) e.x = Math.max(e.x, cx + SHORE_GAP);
+  if (cellAt(map, cx + 1, cy) === LAND) e.x = Math.min(e.x, cx + 1 - SHORE_GAP);
+  if (cellAt(map, cx, cy - 1) === LAND) e.y = Math.max(e.y, cy + SHORE_GAP);
+  if (cellAt(map, cx, cy + 1) === LAND) e.y = Math.min(e.y, cy + 1 - SHORE_GAP);
 }
 
 /** A fixed offset within a cell per blob, from its id (deterministic, no rng draw). */

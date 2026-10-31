@@ -5,6 +5,16 @@ import { TURRET_TYPES } from "../../src/content/turrets.ts";
 const byId = new Map(TREE.map((n) => [n.id, n]));
 
 describe("research tree", () => {
+  // #21: enemies scale by mass, so research scales throughput — fire rate, more turrets, area; damage is rare.
+  it("puts throughput first: most nodes give fire rate, turrets or area, few give damage", () => {
+    const has = (kinds: string[]) => TREE.filter((n) => n.effects.some((e) => kinds.includes(e.kind))).length;
+    const throughput = has(["fireRate", "capacity", "capacityMul", "pattern"]);
+    const damage = has(["damage"]);
+    expect(throughput / TREE.length).toBeGreaterThan(0.6);
+    expect(damage / TREE.length).toBeLessThan(0.06);
+    expect(has(["pattern"])).toBeGreaterThan(100);
+  });
+
   it("has 1,000 to 1,200 nodes", () => {
     expect(TREE.length).toBeGreaterThanOrEqual(1000);
     expect(TREE.length).toBeLessThanOrEqual(1200);

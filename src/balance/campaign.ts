@@ -58,18 +58,23 @@ export function playCampaign(o: CampaignOptions): { results: LevelResult[]; save
     let turrets = 0;
     let bestShare = 0;
     let farmed = 0;
+    let farmStreak = 0;
     while (!won && failures < cap) {
       save = spend(save, o.profile, level, rng);
-      // Stuck far below the bar: a player farms the previous level when it pays more than a hopeless try here.
-      if (failures >= 3 && bestShare < 0.25 && i > 0) {
+      // Stuck far below the bar: a player farms the previous level when it pays more than a hopeless try here,
+      // a few runs at a time, then comes back to try the new research.
+      const base = { levelIndex: i, failures, bestShare, tryPays: points / Math.max(1, runs), farmStreak };
+      if (shouldFarm({ ...base, farmPays: Infinity })) {
         const p = farmPoints(save, i - 1);
-        if (p > (points / Math.max(1, runs)) * 1.5) {
+        if (shouldFarm({ ...base, farmPays: p })) {
           save = { ...save, points: save.points + p };
           farmed++;
           failures++;
+          farmStreak++;
           continue;
         }
       }
+      farmStreak = 0;
       const arsenal = deriveArsenal(save.research);
       const order = bestKinds(level).filter((k) => arsenal.turrets[k]);
       for (const k of TURRET_TYPES.map((t) => t.id)) if (arsenal.turrets[k] && !order.includes(k)) order.push(k);
@@ -91,6 +96,27 @@ export function playCampaign(o: CampaignOptions): { results: LevelResult[]; save
     if (!won) break;
   }
   return { results, save };
+}
+
+/** Farming runs in a row before the bot tries the level again. */
+const FARM_STREAK = 3;
+
+export interface FarmState {
+  levelIndex: number;
+  failures: number;
+  /** Best share of enemies killed on this level so far. */
+  bestShare: number;
+  /** Points a run of the previous level would pay now. */
+  farmPays: number;
+  /** Points a run of this level has paid on average. */
+  tryPays: number;
+  farmStreak: number;
+}
+
+/** Whether the bot farms the previous level instead of trying this one again. */
+export function shouldFarm(f: FarmState): boolean {
+  if (f.levelIndex === 0 || f.failures < 3 || f.bestShare >= 0.25 || f.farmStreak >= FARM_STREAK) return false;
+  return f.farmPays > f.tryPays * 1.5;
 }
 
 /** What a run of `level` pays with the given save's research, placed greedily: for the "best farm" check. */

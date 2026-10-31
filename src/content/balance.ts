@@ -3,9 +3,12 @@
  * (`npm run balance`, report in balance/report.md); change them there, not where they are used.
  */
 export const BALANCE = {
-  /** Hit points per enemy: base × growth^level, times the type's own hit points. */
+  /**
+   * Hit points per enemy: base × growth^level, times the type's own hit points. Enemies scale by mass, not by
+   * toughness (#2, #20): one enemy in level 25 is only ~3× as tough as in level 1; the count carries the rest.
+   */
   hpBase: 6,
-  hpGrowth: 1.3,
+  hpGrowth: 1.05,
   /** Research points per kill: growth^level, so the newest level pays best. */
   killValueGrowth: 1.45,
   /** Research cost: base × depthGrowth^(path length from the start) × size factor × progressGrowth^(nodes owned). */

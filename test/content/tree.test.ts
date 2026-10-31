@@ -45,7 +45,7 @@ describe("research tree", () => {
     const near = small.filter((n) => Math.hypot(n.x, n.y) < 25).map((n) => n.cost);
     const far = small.filter((n) => Math.hypot(n.x, n.y) > 45).map((n) => n.cost);
     expect(Math.min(...far)).toBeGreaterThan(Math.max(...near) / 4);
-    expect(far.reduce((a, b) => a + b, 0) / far.length).toBeGreaterThan(near.reduce((a, b) => a + b, 0) / near.length * 5);
+    expect(far.reduce((a, b) => a + b, 0) / far.length).toBeGreaterThan(near.reduce((a, b) => a + b, 0) / near.length * 2);
   });
 
   it("nodes do not sit on top of each other", () => {

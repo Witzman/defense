@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { buy, canBuy, CATALOG, costOf, deriveArsenal, START_POINTS, type ResearchNode } from "../../src/game/research.ts";
 import { ROOT } from "../../src/content/tree.ts";
 import { turretType } from "../../src/content/turrets.ts";
+import { BALANCE } from "../../src/content/balance.ts";
+
+/** Every node gets dearer with overall progress: this factor per node owned. */
+const g = BALANCE.costProgressGrowth;
 
 const n = (id: string, cost: number, links: string[], effects: ResearchNode["effects"], extra: Partial<ResearchNode> = {}): ResearchNode => ({
   id, name: id, cost, links, effects, size: "small", cluster: "t", x: 0, y: 0, ...extra,
@@ -36,15 +40,20 @@ describe("research on the tree", () => {
     expect(canBuy(rich(["cannon", "rate1", "mortar"]), "syn", nodes)).toBe(true);
   });
 
+  it("without any turret, only turret unlocks can be bought: points spent elsewhere could never come back", () => {
+    expect(canBuy(rich([]), "ability", nodes)).toBe(false);
+    expect(canBuy(rich(["cannon"]), "ability", nodes)).toBe(true);
+  });
+
   it("the start itself cannot be bought, owned nodes not twice", () => {
     expect(canBuy(rich([]), ROOT, nodes)).toBe(false);
     expect(canBuy(rich(["cannon"]), "cannon", nodes)).toBe(false);
   });
 
-  it("a second turret kind costs more than the first", () => {
+  it("a second turret kind costs four times the first (and a little more for progress)", () => {
     const mortar = nodes.find((x) => x.id === "mortar")!;
     expect(costOf(mortar, [], nodes)).toBe(50);
-    expect(costOf(mortar, ["cannon"], nodes)).toBe(200);
+    expect(costOf(mortar, ["cannon"], nodes)).toBe(Math.round(200 * g));
   });
 
   it("capacity adds first, then multiplies", () => {
@@ -62,11 +71,12 @@ describe("research on the tree", () => {
   });
 
   it("buying spends the current cost", () => {
-    expect(buy({ points: 300, research: ["cannon"] }, "mortar", nodes)).toEqual({ points: 100, research: ["cannon", "mortar"] });
+    expect(buy({ points: 300, research: ["cannon"] }, "mortar", nodes)).toEqual({ points: 300 - Math.round(200 * g), research: ["cannon", "mortar"] });
     expect(() => buy({ points: 10, research: [] }, "cannon", nodes)).toThrow();
   });
 
   it("the ability comes from research and improves with it", () => {
+    // (bought after a turret, see the rule above)
     expect(deriveArsenal(["ability", "cd"], nodes).ability!.cooldown).toBe(deriveArsenal(["ability"], nodes).ability!.cooldown * 0.5);
   });
 

@@ -604,15 +604,25 @@ function fireSlow(w: World, t: Turret, first: Enemy, shots: number, p: { radius:
   w.shots.push({ kind: "blast", at: { x, y }, radius: p.radius, turret: t.kind });
 }
 
+/**
+ * Contact kill: a shot kills one member outright if a member has no more hit points than the beam's damage;
+ * against tougher enemies it is plain damage. So the laser executes weak masses and has to grow with them.
+ */
 function fireBeam(w: World, t: Turret, first: Enemy, shots: number) {
-  // Each shot kills one member on contact.
-  let kills = shots;
+  let left = shots;
   let target: Enemy | undefined = first;
   let tracers = 0;
-  while (target && kills > 0) {
-    const k = Math.min(kills, target.size);
-    killTo(w, target, target.size - k);
-    kills -= k;
+  while (target && left > 0) {
+    if (target.hpEach <= t.stats.damage && target.shield <= 0) {
+      const k = Math.min(left, target.size);
+      killTo(w, target, target.size - k);
+      left -= k;
+    } else {
+      const budget = left * t.stats.damage;
+      const use = Math.min(budget, needed(target, t.damageType));
+      hit(w, target, use, t.damageType);
+      left -= Math.ceil(use / t.stats.damage);
+    }
     if (tracers++ < TRACERS) w.shots.push({ kind: "tracer", from: { x: t.x, y: t.y }, to: { x: target.x, y: target.y }, turret: t.kind });
     target = target.size > 0 ? undefined : nearest(w, t);
   }

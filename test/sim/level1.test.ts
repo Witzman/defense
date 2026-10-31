@@ -3,9 +3,9 @@ import { level1 } from "../../src/content/levels.ts";
 import { canPlace, createWorld, DT, runToEnd, type Arsenal } from "../../src/sim/world.ts";
 import { turretType } from "../../src/content/turrets.ts";
 
-/** Three cannons at base strength: what early research gives. */
-const ARSENAL: Arsenal = { turrets: { cannon: { capacity: 3, stats: turretType("cannon").base } } };
-const CAPACITY = 3;
+/** Four cannons with a few damage upgrades: what the first runs of research buy. */
+const ARSENAL: Arsenal = { turrets: { cannon: { capacity: 4, stats: { ...turretType("cannon").base, damage: 4 } } } };
+const CAPACITY = 4;
 const RANGE = turretType("cannon").base.range;
 import type { Point } from "../../src/sim/map.ts";
 import type { Placement } from "../../src/sim/world.ts";

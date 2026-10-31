@@ -8,6 +8,7 @@
  */
 import { TURRET_TYPES, turretType, type TurretKind } from "./turrets.ts";
 import type { DamageType } from "./enemies.ts";
+import { BALANCE } from "./balance.ts";
 
 export type PatternField = "radius" | "burnSeconds" | "jumps" | "width" | "factor" | "seconds" | "angle";
 
@@ -49,8 +50,6 @@ export interface ResearchNode {
 /** The start node; always owned, never bought. */
 export const ROOT = "start";
 
-const BASE_COST = 15;
-const DEPTH_GROWTH = 1.25;
 const SIZE_COST: Record<NodeSize, number> = { start: 0, small: 1, notable: 3, keystone: 10, entry: 1, synergy: 5 };
 const UNLOCK_COST = 60;
 const UNLOCK_GROWTH = 4;
@@ -260,7 +259,7 @@ export function buildTree(): ResearchNode[] {
   return [...nodes.values()].map(({ fixedCost, ...n }) => ({
     ...n,
     links: [...new Set(n.links)],
-    cost: fixedCost ?? Math.round(BASE_COST * DEPTH_GROWTH ** (depth.get(n.id) ?? 0) * SIZE_COST[n.size]),
+    cost: fixedCost ?? Math.round(BALANCE.costBase * BALANCE.costDepthGrowth ** (depth.get(n.id) ?? 0) * SIZE_COST[n.size]),
   }));
 }
 

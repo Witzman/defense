@@ -46,3 +46,15 @@ button.ghost { background: transparent; color: var(--text); border: 1px solid #4
 .branch li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; background: #1b2742; border-radius: 8px; }
 .branch .effect { color: var(--muted); font-size: 13px; }
 .branch li button { grid-row: span 2; min-width: 120px; }
+.panel.wide { background: #0b1020; inset: 56px 16px 76px; padding-bottom: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.tree-wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 300px; gap: 12px; }
+#tree { width: 100%; height: 100%; border-radius: 8px; cursor: grab; }
+#node-info { overflow: auto; padding: 4px 4px 12px; }
+#node-info h3 { margin: 4px 0 10px; font-size: 17px; }
+#node-info .effects { margin: 0 0 10px; padding-left: 18px; }
+#node-info .effects li { margin: 3px 0; }
+#node-info .cost { color: #f2c14e; font-weight: 600; }
+#node-info button { width: 100%; margin-top: 8px; }
+.muted { color: var(--muted); font-size: 13px; }
+.legend { flex: 1; }
+@media (max-width: 760px) { .tree-wrap { grid-template-columns: 1fr; grid-template-rows: 1fr 180px; } }

@@ -1,11 +1,15 @@
 import type { DamageType } from "./enemies.ts";
 
-export type TurretKind = "cannon" | "mortar" | "flamer" | "laser" | "tesla";
+export type TurretKind =
+  | "cannon" | "mortar" | "flamer" | "laser" | "tesla" | "gatling"
+  | "rocket" | "napalm" | "railgun" | "frost" | "breaker" | "shrapnel";
 
 /** How a weapon delivers its damage. */
 export type Pattern =
   | { kind: "single" }
-  | { kind: "splash"; radius: number }
+  | { kind: "splash"; radius: number; burnSeconds?: number }
+  | { kind: "pierce"; width: number }
+  | { kind: "slow"; radius: number; factor: number; seconds: number }
   | { kind: "cone"; angle: number; burnSeconds: number }
   | { kind: "beam" }
   | { kind: "chain"; jumps: number; reach: number; falloff: number };
@@ -37,6 +41,13 @@ export const TURRET_TYPES: readonly TurretType[] = [
   { id: "flamer", color: "#ff7b39", name: "Flammenwerfer", symbol: "▲", damageType: "fire", pattern: { kind: "cone", angle: 50, burnSeconds: 2 }, base: { range: 2.5, damage: 2, shotsPerSecond: 1, turnRate: 180 } },
   { id: "laser", color: "#ff5d8f", name: "Laser", symbol: "◆", damageType: "energy", pattern: { kind: "beam" }, base: { range: 5, damage: 0, shotsPerSecond: 1.5, turnRate: 360 } },
   { id: "tesla", color: "#7fdbff", name: "Tesla", symbol: "✦", damageType: "electric", pattern: { kind: "chain", jumps: 3, reach: 2, falloff: 0.7 }, base: { range: 3.5, damage: 1, shotsPerSecond: 1.2, turnRate: 360 } },
+  { id: "gatling", color: "#c3b1e1", name: "Gatling", symbol: "✱", damageType: "kinetic", pattern: { kind: "single" }, base: { range: 3.5, damage: 0.4, shotsPerSecond: 12, turnRate: 300 } },
+  { id: "rocket", color: "#f4a261", name: "Rakete", symbol: "➤", damageType: "explosive", pattern: { kind: "splash", radius: 2 }, base: { range: 9, damage: 4, shotsPerSecond: 0.4, turnRate: 60 } },
+  { id: "napalm", color: "#e76f51", name: "Brandbombe", symbol: "✹", damageType: "fire", pattern: { kind: "splash", radius: 1.5, burnSeconds: 3 }, base: { range: 5, damage: 1, shotsPerSecond: 0.5, turnRate: 90 } },
+  { id: "railgun", color: "#90e0ef", name: "Railgun", symbol: "▮", damageType: "kinetic", pattern: { kind: "pierce", width: 0.4 }, base: { range: 10, damage: 3, shotsPerSecond: 0.5, turnRate: 45 } },
+  { id: "frost", color: "#a8dadc", name: "Frost", symbol: "❄", damageType: "energy", pattern: { kind: "slow", radius: 1.2, factor: 0.5, seconds: 2 }, base: { range: 4, damage: 0.3, shotsPerSecond: 1, turnRate: 180 } },
+  { id: "breaker", color: "#9b5de5", name: "Schildbrecher", symbol: "⬢", damageType: "electric", pattern: { kind: "single" }, base: { range: 4, damage: 2, shotsPerSecond: 1, turnRate: 200 } },
+  { id: "shrapnel", color: "#d4d700", name: "Splitter", symbol: "✚", damageType: "kinetic", pattern: { kind: "splash", radius: 0.8 }, base: { range: 3, damage: 0.6, shotsPerSecond: 4, turnRate: 200 } },
 ];
 
 export function turretType(id: TurretKind): TurretType {

@@ -21,14 +21,15 @@ it forwards `/api` and `/healthz` to the server on port 3000.
 ```sh
 npm ci
 npm run typecheck
-npm test     # the store tests need Postgres: set PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+npm test     # store tests need a THROWAWAY Postgres (they empty the table): set PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
 npm run build
 ```
 
 ## Deploy (Dokploy)
 
 - Compose project from this repository, branch `main`, compose file `compose.yaml`.
-- Environment: `POSTGRES_PASSWORD`.
+- Environment: `POSTGRES_PASSWORD`. Postgres reads it only when the volume is first created;
+  changing it later locks the app out until the password is changed inside the database too.
 - Domain on service `app`, port `3000`.
 - The save game lives in the volume `pgdata`; it survives redeploys.
 

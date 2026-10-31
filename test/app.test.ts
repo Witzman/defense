@@ -52,6 +52,7 @@ describe("save api", () => {
     ["an array", "[1]"],
     ["no version", JSON.stringify({ points: 1 })],
     ["a non-integer version", JSON.stringify({ version: "1" })],
+    ["a NUL character, which Postgres jsonb cannot store", JSON.stringify({ version: 1, name: "a\u0000b" })],
   ])("rejects %s with 400 and keeps the old save", async (_name, body) => {
     await put(JSON.stringify({ version: 1 }));
     expect((await put(body)).status).toBe(400);

@@ -1,4 +1,4 @@
-import type pg from "pg";
+import pg from "pg";
 
 export type SaveData = Record<string, unknown>;
 
@@ -7,6 +7,17 @@ export interface Store {
   load(slot: string): Promise<SaveData | null>;
   save(slot: string, data: SaveData): Promise<void>;
   healthy(): Promise<boolean>;
+}
+
+/**
+ * A pool that outlives a dropped connection. Without an error listener pg-pool's "error" event
+ * (Postgres restarted, session terminated) crashes the process; with it the dead client is discarded.
+ * Connection settings come from PGHOST, PGPORT, PGUSER, PGPASSWORD and PGDATABASE.
+ */
+export function createPool(): pg.Pool {
+  const pool = new pg.Pool();
+  pool.on("error", (err) => console.warn(`postgres client dropped: ${err.message}`));
+  return pool;
 }
 
 /** Save games in Postgres, one row per slot. The prototype uses the slot "global"; with login it becomes the user id. */

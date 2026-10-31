@@ -1,10 +1,8 @@
 import { createServer } from "node:http";
-import pg from "pg";
 import { createApp } from "./app.ts";
-import { createPgStore } from "./store.ts";
+import { createPgStore, createPool } from "./store.ts";
 
-// pg reads PGHOST, PGPORT, PGUSER, PGPASSWORD and PGDATABASE from the environment.
-const pool = new pg.Pool();
+const pool = createPool();
 const store = createPgStore(pool);
 const port = Number(process.env.PORT ?? 3000);
 const distDir = process.env.DIST_DIR ?? new URL("../dist", import.meta.url).pathname;

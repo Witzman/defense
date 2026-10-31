@@ -118,5 +118,7 @@ function parseSave(text: string): SaveData {
   }
   if (typeof data !== "object" || data === null || Array.isArray(data)) throw new HttpError(400, "save must be an object");
   if (!Number.isInteger((data as { version?: unknown }).version)) throw new HttpError(400, "save needs an integer version");
+  // Postgres jsonb cannot store U+0000; reject it here instead of failing in the database.
+  if (text.includes("\\u0000") || text.includes("\u0000")) throw new HttpError(400, "save must not contain U+0000");
   return data as SaveData;
 }

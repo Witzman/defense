@@ -47,6 +47,9 @@ export function zoomAt(view: View, sx: number, sy: number, factor: number, min: 
   return { scale, ox: sx - (sx - view.ox) * k, oy: sy - (sy - view.oy) * k };
 }
 
+/** How far the drawn shore reaches into a water cell, in cells; see SHORE_GAP in the simulation. */
+const LAND_REACH = 0.12;
+
 /** Pixels per cell above which enemies are drawn one by one; below FIELD_SCALE only the density field shows. */
 export const BLOB_SCALE = 14;
 export const FIELD_SCALE = 7;
@@ -63,22 +66,26 @@ export function drawTerrain(map: GameMap, scale: number): HTMLCanvasElement {
   const g = c.getContext("2d")!;
   g.fillStyle = COLORS.water;
   g.fillRect(0, 0, c.width, c.height);
-  // Outside the map counts as land (cellAt): the playing field is a lake framed by shore.
-  for (let y = -1; y <= map.height; y++)
-    for (let x = -1; x <= map.width; x++)
-      if (x < 0 || y < 0 || x >= map.width || y >= map.height) {
-        g.fillStyle = COLORS.shore;
-        disc(g, (x + 0.5) * scale, (y + 0.5) * scale, scale * 0.9);
+  // Land as rounded blobs so islands read as organic shapes, not squares. The shore reaches only LAND_REACH into a
+  // water cell, so blobs (kept SHORE_GAP off the edge by the simulation) never overlap an island (#11).
+  const landAt = (x: number, y: number) => cellAt(map, x, y) === LAND;
+  const island = (r: number) => {
+    // Outside the map counts as land (cellAt): the playing field is a lake framed by shore.
+    for (let y = -1; y <= map.height; y++)
+      for (let x = -1; x <= map.width; x++) {
+        if (!landAt(x, y)) continue;
+        disc(g, (x + 0.5) * scale, (y + 0.5) * scale, r * scale);
+        // Neighbouring land joins with a straight edge instead of a chain of beads.
+        if (landAt(x + 1, y)) g.fillRect((x + 0.5) * scale, (y + 0.5 - r) * scale, scale, 2 * r * scale);
+        if (landAt(x, y + 1)) g.fillRect((x + 0.5 - r) * scale, (y + 0.5) * scale, 2 * r * scale, scale);
+        // A 2×2 block of land: fill the hole the four discs leave in its middle.
+        if (landAt(x + 1, y) && landAt(x, y + 1) && landAt(x + 1, y + 1)) g.fillRect((x + 0.5) * scale, (y + 0.5) * scale, scale, scale);
       }
-  // Land as rounded blobs so islands read as organic shapes, not squares.
+  };
   g.fillStyle = COLORS.shore;
-  for (let y = 0; y < map.height; y++)
-    for (let x = 0; x < map.width; x++)
-      if (cellAt(map, x, y) === LAND) disc(g, (x + 0.5) * scale, (y + 0.5) * scale, scale * 0.86);
+  island(0.5 + LAND_REACH);
   g.fillStyle = COLORS.land;
-  for (let y = 0; y < map.height; y++)
-    for (let x = 0; x < map.width; x++)
-      if (cellAt(map, x, y) === LAND) disc(g, (x + 0.5) * scale, (y + 0.5) * scale, scale * 0.74);
+  island(0.5 + LAND_REACH - 0.07);
   return c;
 }
 

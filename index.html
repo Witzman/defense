@@ -15,6 +15,7 @@
   <body>
     <canvas id="game"></canvas>
     <header id="hud">
+      <span>Level <strong id="level">1</strong></span>
       <span>Verbleibend <strong id="remaining">0</strong></span>
       <span class="energy">Ziel <span class="bar"><span id="energy-fill"></span></span> <strong id="energy">100 %</strong></span>
     </header>
@@ -24,6 +25,7 @@
         <span class="icon"></span><span id="capacity">0/0</span>
       </span>
       <button id="start" type="button">Run starten</button>
+      <button id="next" type="button" hidden>Nächstes Level</button>
     </footer>
     <script type="module" src="./src/main.ts"></script>
   </body>

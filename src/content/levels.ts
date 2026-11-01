@@ -45,6 +45,12 @@ function spawnSeconds(i: number): number {
 /** Generated maps, kept: a labyrinth may take a second to draw on a slow device, and nothing changes a map's cells. */
 const maps = new Map<number, GameMap>();
 
+/** What enemies of level index `i` have learned about danger (#39): none in the first levels, all of it at the end. */
+export function learning(i: number): number {
+  const { dangerLearnFrom: from, dangerLearnTo: to } = BALANCE;
+  return Math.min(1, Math.max(0, (i + 1 - from) / (to - from)));
+}
+
 export function campaignLevel(i: number): LevelDef {
   const rng = createRng(90_000 + i * 7919);
   const width = 40 + i * 6;
@@ -100,7 +106,7 @@ export function campaignLevel(i: number): LevelDef {
   const packet = Math.max(1, Math.ceil(total / 3000));
   return {
     map,
-    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: ENEMY_SPEED, packet },
+    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, learning: learning(i), speed: ENEMY_SPEED, packet },
     goalEnergy: Math.max(1, Math.round((total * GOAL_TOLERANCE) / goals)),
     cellCapacity: 3 * packet,
     // Every level has its own run, the same on every try (#28).

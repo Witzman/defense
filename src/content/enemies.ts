@@ -24,6 +24,12 @@ export interface EnemyType {
    * A cost, never a wall: a shallow channel stays passable when it is the only way.
    */
   depthPreference: number;
+  /**
+   * How strongly the type steers round places where many enemies died (#39): a cell at full danger costs it
+   * 1 + dangerCost × dangerAvoidance times its length, scaled by what the level has taught (`enemies.learning`).
+   * A cost, never a wall. 0 = does not care.
+   */
+  dangerAvoidance: number;
 }
 
 /** Electric damage against shields counts this many times over. */
@@ -36,12 +42,12 @@ export const SHIELD_BREAKER = 3;
 // indifferent too: the start must stay as playable as it was (#2); a preference of 1 there left the random player of
 // the balancing guard without a win in 40 tries. Few distinct values keep the route fields few.
 export const ENEMY_TYPES: readonly EnemyType[] = [
-  { id: "green", name: "Grünling", color: "#a7d64a", edge: "#6f9a24", hp: 1, shield: 0, speed: 1, resist: {}, depthPreference: 0 },
-  { id: "armor", name: "Panzer", color: "#5aa9e6", edge: "#2f6f9f", hp: 2, shield: 0, speed: 0.85, resist: { kinetic: 0.6 }, depthPreference: 2 },
-  { id: "ember", name: "Glut", color: "#f28c38", edge: "#b0561a", hp: 1.2, shield: 0, speed: 1, resist: { fire: 1 }, depthPreference: 1 },
-  { id: "shield", name: "Schildträger", color: "#b388eb", edge: "#7a52b3", hp: 1, shield: 2, speed: 0.9, resist: {}, depthPreference: 1 },
-  { id: "swarm", name: "Schwarm", color: "#f6e05e", edge: "#b7a02a", hp: 0.5, shield: 0, speed: 1.6, resist: {}, depthPreference: 0 },
-  { id: "rock", name: "Fels", color: "#9aa5b1", edge: "#5f6b78", hp: 2.5, shield: 0, speed: 0.6, resist: { explosive: 0.5, kinetic: 0.3 }, instantKillImmune: true, depthPreference: 4 },
+  { id: "green", name: "Grünling", color: "#a7d64a", edge: "#6f9a24", hp: 1, shield: 0, speed: 1, resist: {}, depthPreference: 0, dangerAvoidance: 0.5 },
+  { id: "armor", name: "Panzer", color: "#5aa9e6", edge: "#2f6f9f", hp: 2, shield: 0, speed: 0.85, resist: { kinetic: 0.6 }, depthPreference: 2, dangerAvoidance: 0.5 },
+  { id: "ember", name: "Glut", color: "#f28c38", edge: "#b0561a", hp: 1.2, shield: 0, speed: 1, resist: { fire: 1 }, depthPreference: 1, dangerAvoidance: 0.5 },
+  { id: "shield", name: "Schildträger", color: "#b388eb", edge: "#7a52b3", hp: 1, shield: 2, speed: 0.9, resist: {}, depthPreference: 1, dangerAvoidance: 0.5 },
+  { id: "swarm", name: "Schwarm", color: "#f6e05e", edge: "#b7a02a", hp: 0.5, shield: 0, speed: 1.6, resist: {}, depthPreference: 0, dangerAvoidance: 1 },
+  { id: "rock", name: "Fels", color: "#9aa5b1", edge: "#5f6b78", hp: 2.5, shield: 0, speed: 0.6, resist: { explosive: 0.5, kinetic: 0.3 }, instantKillImmune: true, depthPreference: 4, dangerAvoidance: 0.25 },
 ];
 
 export function enemyType(id: string): EnemyType {

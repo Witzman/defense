@@ -160,3 +160,11 @@ figure.goal b.fell { color: var(--goal); }
 .verdicts .symbol { font-size: 13px; margin-right: 3px; }
 .verdicts small { color: var(--muted); font-size: 11px; }
 @media (pointer: coarse) { tr.enemy-row td { padding: 13px 8px; } }
+/* Enemy preview (#31): chips under each spawn in preparation. Only the chips take touches; the map stays usable. */
+#preview { position: fixed; inset: 0; pointer-events: none; }
+.spawn-chips { position: absolute; left: 0; top: 0; display: flex; gap: 4px; pointer-events: none; will-change: transform; }
+.spawn-chip { pointer-events: auto; display: flex; align-items: center; gap: 5px; padding: 3px 9px 3px 6px; color: var(--text); font-size: 12px; font-weight: 400; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--pill); font-variant-numeric: tabular-nums; cursor: help; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.spawn-chip b { font-weight: 600; }
+.spawn-chip small { color: var(--muted); font-size: 11px; }
+.spawn-chip .dot { width: 11px; height: 11px; margin: 0; }
+@media (pointer: coarse) { .spawn-chip { min-height: 44px; padding: 4px 12px 4px 9px; font-size: 13px; } }

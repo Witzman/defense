@@ -3,7 +3,7 @@
  * column beside it, and a purchase only after confirming there.
  */
 import { applyMove, attachGestures } from "./gestures.ts";
-import { ROOT, type Effect, type ResearchNode } from "../content/tree.ts";
+import { NODE_RADIUS as RADIUS, ROOT, type Effect, type ResearchNode } from "../content/tree.ts";
 import { TURRET_TYPES, turretType, type TurretKind } from "../content/turrets.ts";
 import { canBuy, CATALOG, costOf } from "../game/research.ts";
 import type { Save } from "../game/save.ts";
@@ -23,7 +23,6 @@ const CLUSTER_COLORS: Record<string, string> = {
 const GLOBAL_SYMBOLS: Record<string, string> = {
   ballistics: "⊕", thermal: "☀", electrics: "ϟ", cooling: "❆", optics: "◉", logistics: "▣", ability: "⌖", bridge: "⇄", start: "★",
 };
-const RADIUS: Record<ResearchNode["size"], number> = { start: 1.5, entry: 1.1, keystone: 1.25, notable: 0.75, synergy: 0.85, small: 0.38 };
 
 type State = "owned" | "buyable" | "expensive" | "locked";
 

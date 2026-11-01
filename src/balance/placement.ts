@@ -1,3 +1,4 @@
+import { BALANCE } from "../content/balance.ts";
 import type { Point } from "../sim/map.ts";
 import { cellAt, LAND, WATER } from "../sim/map.ts";
 import { canPlace, createWorld, step, type Arsenal, type LevelDef, type Placement } from "../sim/world.ts";
@@ -8,6 +9,21 @@ import type { TurretKind } from "../content/turrets.ts";
  * the same by watching a run or two.
  */
 export function sampleFlow(level: LevelDef, seed = 1, maxTicks = 30 * 240): Float64Array {
+  // The probe has no turrets and a fixed run seed, so it is the same on every try of a level (#28) and does not
+  // depend on hit points: once per level and process is enough (it is the costliest part of a try on big maps).
+  const key = `${level.runSeed}:${seed}:${maxTicks}:${JSON.stringify(level.enemies.groups)}:${BALANCE.dangerCost}`;
+  const perMap = flows.get(level.map) ?? new Map<string, Float64Array>();
+  flows.set(level.map, perMap);
+  const hit = perMap.get(key);
+  if (hit) return hit;
+  const flow = probeFlow(level, seed, maxTicks);
+  perMap.set(key, flow);
+  return flow;
+}
+
+const flows = new WeakMap<object, Map<string, Float64Array>>();
+
+function probeFlow(level: LevelDef, seed: number, maxTicks: number): Float64Array {
   // Goals that never fall: the whole level flows, groups that start late included.
   const w = createWorld({ ...level, goalEnergy: Number.MAX_SAFE_INTEGER }, { turrets: {} }, [], seed);
   const flow = new Float64Array(level.map.cells.length);

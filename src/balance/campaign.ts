@@ -37,6 +37,8 @@ export interface CampaignOptions {
   /** Start from this save instead of a new game. */
   save?: Save;
   onLevel?: (r: LevelResult) => void;
+  /** Called when the player enters a level, with the save they bring: the preset of that level (#11). */
+  onEnter?: (levelIndex: number, save: Save) => void;
 }
 
 /** One automated player through the campaign, with the game's own rules, points and research. */
@@ -47,6 +49,7 @@ export function playCampaign(o: CampaignOptions): { results: LevelResult[]; save
   const levels = o.levels ?? LEVELS.map((_, i) => i);
   const cap = o.maxAttempts ?? 60;
   for (const i of levels) {
+    o.onEnter?.(i, save);
     const level = LEVELS[i]!();
     const total = enemyCount(level);
     const flow = sampleFlow(level);

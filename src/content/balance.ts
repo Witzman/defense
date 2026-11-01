@@ -9,6 +9,10 @@ export const BALANCE = {
    */
   hpBase: 6,
   hpGrowth: 1.05,
+  /** Correction per level index on top of the curve (#11, found by `npm run balance:search`); missing = 1. */
+  levelHp: {} as Record<number, number>,
+  /** Correction of the points per kill per level index; missing = 1. */
+  levelKillValue: {} as Record<number, number>,
   /** Research points per kill: growth^level, so the newest level pays best. */
   killValueGrowth: 1.45,
   /** Research cost: base × depthGrowth^(path length from the start) × size factor × progressGrowth^(nodes owned). */

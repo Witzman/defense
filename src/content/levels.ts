@@ -106,7 +106,7 @@ export function campaignLevel(i: number): LevelDef {
   const packet = Math.max(1, Math.ceil(total / 3000));
   return {
     map,
-    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, learning: learning(i), speed: ENEMY_SPEED, packet },
+    enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i * (BALANCE.levelHp[i] ?? 1), learning: learning(i), speed: ENEMY_SPEED, packet },
     goalEnergy: Math.max(1, Math.round((total * GOAL_TOLERANCE) / goals)),
     cellCapacity: 3 * packet,
     // Every level has its own run, the same on every try (#28).

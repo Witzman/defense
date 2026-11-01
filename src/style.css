@@ -27,8 +27,12 @@ canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; cursor: cr
 #hud strong { font-variant-numeric: tabular-nums; }
 .bar { display: inline-block; width: 140px; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: var(--pill); vertical-align: middle; overflow: hidden; }
 #energy-fill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--goal), #ffb36b); transition: width 0.2s; }
-#bar { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px 10px; background: var(--panel); border: 1px solid var(--edge); border-radius: 22px; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-#palette { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+#bar { position: fixed; width: max-content; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px 10px; background: var(--panel); border: 1px solid var(--edge); border-radius: 22px; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+/* One row of kinds (#35): it scrolls sideways and fades out at an edge where more kinds follow. */
+#palette { position: relative; display: flex; gap: 6px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; touch-action: pan-x; --fade-l: 0px; --fade-r: 0px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent); }
+#palette::-webkit-scrollbar { display: none; }
+#palette.more-left { --fade-l: 36px; }
+#palette.more-right { --fade-r: 36px; }
 .slot { --kind: var(--text); display: flex; gap: 8px; align-items: center; padding: 6px 10px; color: var(--text); background: var(--tile); border: 1px solid var(--edge); border-radius: var(--round); font-variant-numeric: tabular-nums; }
 .slot.selected { border-color: var(--kind); box-shadow: 0 0 0 1px var(--kind) inset, 0 0 14px color-mix(in srgb, var(--kind) 40%, transparent); }
 .symbol { color: var(--kind); font-size: 17px; line-height: 1; }
@@ -86,12 +90,6 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
   #hud .bar { width: 70px; }
   #bar { gap: 8px; }
   .save-state { min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-}
-/* Too narrow for every turret in one row: the palette gets its own row(s) above the buttons, hints move to the top. */
-@media (max-width: 1300px) {
-  #bar { flex-wrap: wrap; justify-content: center; width: max-content; }
-  #palette { order: -1; flex: 1 1 100%; flex-wrap: wrap; justify-content: center; overflow: visible; }
-  #hint, #ability { bottom: auto; top: calc(64px + env(safe-area-inset-top)); }
 }
 @media (max-width: 600px) { #hud .energy .bar, .save-state { display: none; } }
 /* Fingers: bigger targets. */

@@ -36,8 +36,6 @@ canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; cursor: cr
 .slot { --kind: var(--text); display: flex; gap: 8px; align-items: center; padding: 6px 10px; color: var(--text); background: var(--tile); border: 1px solid var(--edge); border-radius: var(--round); font-variant-numeric: tabular-nums; }
 .slot.selected { border-color: var(--kind); box-shadow: 0 0 0 1px var(--kind) inset, 0 0 14px color-mix(in srgb, var(--kind) 40%, transparent); }
 .symbol { color: var(--kind); font-size: 17px; line-height: 1; }
-#ability { position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); margin: 0; padding: 7px 16px; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--pill); color: var(--muted); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-#ability.ready { color: var(--points); }
 .branch { list-style: none; }
 .branch h3 { margin: 18px 0 8px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
 .branch h3 small { color: var(--muted); font-weight: 400; }
@@ -84,6 +82,16 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
 #tools #speed { font-size: 16px; font-variant-numeric: tabular-nums; }
 #tools #pause { font-size: 16px; }
 #tools #run-tools button.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 12px rgba(126, 224, 210, 0.3); }
+/* Precision shot (#37): the ring fills over the cooldown, the button glows gold when the shot is ready. */
+#tools #ability-btn { padding: 2px; }
+#ability-btn svg { width: 40px; height: 40px; display: block; margin: auto; fill: none; stroke-linecap: round; }
+#ability-btn .track { stroke: rgba(255, 255, 255, 0.12); stroke-width: 3; }
+#ability-btn .ring { stroke: var(--muted); stroke-width: 3; stroke-dasharray: 0 1; transform: rotate(-90deg); transform-origin: 20px 20px; }
+#ability-btn .cross { stroke: var(--muted); stroke-width: 2; }
+#tools #ability-btn.ready { border-color: var(--points); box-shadow: 0 0 16px rgba(255, 211, 107, 0.45); }
+#ability-btn.ready .ring, #ability-btn.ready .cross { stroke: var(--points); }
+/* With a mouse the same ring follows the cursor while the shot recharges. */
+#ability-cursor { position: fixed; z-index: 2; left: 0; top: 0; width: 22px; height: 22px; margin: 10px 0 0 10px; border-radius: 50%; pointer-events: none; background: conic-gradient(var(--points) calc(var(--p, 0) * 360deg), rgba(255, 255, 255, 0.18) 0); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px)); }
 #tools-label { font-size: 11px; color: var(--muted); text-align: center; }
 #tools button { min-width: 48px; min-height: 48px; padding: 4px; font-size: 20px; background: var(--panel); border-color: var(--edge); }
 #tools > button { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
@@ -104,4 +112,4 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
 }
 .panel[hidden], [hidden] { display: none !important; }
 /* Hints only inform: touches and clicks go through to the map beneath (#25). */
-#hint, #ability { pointer-events: none; }
+#hint { pointer-events: none; }

@@ -28,6 +28,22 @@ export interface TurretStats {
   arc?: number;
 }
 
+/**
+ * Effects a hit can trigger (#42), each with a chance per shot that research raises:
+ * freeze (strong slow, target gets brittle), stun (a short stop), ignite (burns), grenade (a second blast on the
+ * neighbour of the target), mark (the target takes more damage for a while).
+ */
+export type ProcKind = "freeze" | "stun" | "ignite" | "grenade" | "mark";
+export const PROC_LABEL: Record<ProcKind, string> = { freeze: "einfrieren", stun: "betäuben", ignite: "entzünden", grenade: "Granate auf den Nebenmann", mark: "markieren" };
+
+/** Combinations between kinds that research can switch on (#42). */
+export type Combo = "shatter" | "conduct" | "blaze";
+export const COMBO_TEXT: Record<Combo, string> = {
+  shatter: "Zersplittern: Eingefrorene nehmen 50 % mehr Schaden von Geschossen und Explosionen",
+  conduct: "Leitfähig: Nasse (von Frost getroffen) nehmen 50 % mehr Strom-Schaden",
+  blaze: "Feuersturm: Brennende nehmen 30 % mehr Explosionsschaden",
+};
+
 export const START_ARC = 20;
 export const MAX_ARC = 180;
 

@@ -7,9 +7,10 @@ const byId = new Map(TREE.map((n) => [n.id, n]));
 
 describe("research tree", () => {
   // #21: enemies scale by mass, so research scales throughput — fire rate, more turrets, area; damage is rare.
-  it("puts throughput first: most nodes give fire rate, turrets or area, few give damage", () => {
+  // #42: hit effects (proc), the arc and the combos count with throughput: they decide how much of the mass a turret handles.
+  it("puts throughput first: most nodes give fire rate, turrets, area or hit effects, few give damage", () => {
     const has = (kinds: string[]) => TREE.filter((n) => n.effects.some((e) => kinds.includes(e.kind))).length;
-    const throughput = has(["fireRate", "capacity", "capacityMul", "pattern"]);
+    const throughput = has(["fireRate", "capacity", "capacityMul", "pattern", "proc", "procPower", "combo"]);
     const damage = has(["damage"]);
     expect(throughput / TREE.length).toBeGreaterThan(0.6);
     expect(damage / TREE.length).toBeLessThan(0.06);

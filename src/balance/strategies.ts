@@ -37,8 +37,9 @@ export function kindPower(a: Arsenal, kind: TurretKind, level: LevelDef): number
   const t = turretType(kind);
   const perShot = t.pattern.kind === "beam" && k.stats.damage >= hpEach ? hpEach : k.stats.damage;
   // A narrow arc covers less of the stream (#41): from 0.3 at the start to 1 at the widest.
+  const procs = Object.values(k.procs ?? {}).reduce((s, p) => s + Math.min(1, p.chance) * (1 + p.power), 0);
   const arcFactor = 0.3 + 0.7 * (Math.min(k.stats.arc ?? 360, 180) / 180);
-  return k.capacity * perShot * k.stats.shotsPerSecond * (PATTERN_FACTOR[t.pattern.kind] ?? 1) * (0.6 + 0.1 * k.stats.range) * effectiveness(kind, level) * arcFactor;
+  return k.capacity * perShot * k.stats.shotsPerSecond * (PATTERN_FACTOR[t.pattern.kind] ?? 1) * (0.6 + 0.1 * k.stats.range) * effectiveness(kind, level) * arcFactor * (1 + 0.8 * procs);
 }
 
 export function arsenalPower(a: Arsenal, level: LevelDef): number {

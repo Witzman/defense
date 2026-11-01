@@ -4,7 +4,7 @@
  */
 import { applyMove, attachGestures } from "./gestures.ts";
 import { NODE_RADIUS as RADIUS, ROOT, type Effect, type ResearchNode } from "../content/tree.ts";
-import { TURRET_TYPES, turretType, type TurretKind } from "../content/turrets.ts";
+import { COMBO_TEXT, PROC_LABEL, TURRET_TYPES, turretType, type TurretKind } from "../content/turrets.ts";
 import { canBuy, CATALOG, costOf } from "../game/research.ts";
 import type { Save } from "../game/save.ts";
 
@@ -290,6 +290,9 @@ export function describe(e: Effect): string {
     case "fireRate": return `${name}: Feuerrate ${pct(e.mul)}`;
     case "range": return `${name}: Reichweite +${e.add}`;
     case "damage": return `${name}: Schaden ${pct(e.mul)}`;
+    case "proc": return `${name}: +${Math.round(e.chance * 100)} % Chance, ${PROC_LABEL[e.proc]}`;
+    case "procPower": return `${name}: ${PROC_LABEL[e.proc]} wirkt doppelt so stark`;
+    case "combo": return COMBO_TEXT[e.combo];
     case "arc": return `${name}: Schwenkbereich +${e.add}°`;
     case "turnRate": return `${name}: Schwenken ${pct(e.mul)}`;
     case "pattern": return `${name}: ${PATTERN_FIELDS[e.field]} +${e.add}`;

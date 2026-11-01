@@ -466,9 +466,9 @@ function renderResearch() {
   tree.open();
 }
 
-/** Game time per real second during a run. Owner, 2026-10-31: runs felt 10–20 % too slow. Changes only the pace, not
- * the balance: the simulation still steps in fixed DT. */
-const GAME_SPEED = 1.15;
+/** Game time per real second during a run. Owner: +15 % on 2026-10-31, another +15 % on 2026-11-01 (#29). Changes only
+ * the pace, not the balance: the simulation still steps in fixed DT. */
+const GAME_SPEED = 1.15 * 1.15;
 
 let last = performance.now();
 let acc = 0;

@@ -5,10 +5,10 @@ import { runPoints } from "./game/points.ts";
 import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
 import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
-import { nextArc, spreadArc, turnedFacing } from "./ui/turretEdit.ts";
+import { facingToWater, turnedFacing } from "./ui/turretEdit.ts";
 import { cooldownFraction, frameSteps, nextSpeed, parseSpeed, slotCount, type Speed } from "./ui/controls.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
-import type { Point } from "./sim/map.ts";
+import { WATER, type Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
 import { analyse } from "./game/stats.ts";
 import { renderAnalysis, summaryHtml } from "./ui/analysis.ts";
@@ -26,8 +26,6 @@ const hint = $("hint");
 const dpr = () => window.devicePixelRatio || 1;
 const fmt = new Intl.NumberFormat("de-DE");
 
-/** Swivel arcs the player cycles through, in degrees. */
-
 let save: Save = emptySave();
 let arsenal: Arsenal = { turrets: {} };
 let levelIndex = 0;
@@ -35,8 +33,8 @@ let level: LevelDef;
 let total = 0;
 let placements: Placement[] = [];
 let selected: TurretKind | undefined;
-/** Facing and arc for the next turret placed; the last one set carries over. */
-let draft = { facing: 0, arc: 360 };
+/** Facing for the next turret placed; the last one set carries over. The swivel arc comes from research (#41). */
+let draft: { facing?: number } = {};
 let world: World;
 let phase: "prepare" | "run" | "over" = "prepare";
 let cursor: Point | undefined;
@@ -141,10 +139,10 @@ const placedAt = (c: Point) => placements.findIndex((p) => p.x === c.x && p.y ==
 /** Touch has no hover (#15): a tapped turret is picked, and the turret tools turn, narrow or remove it. */
 let picked: Placement | undefined;
 /**
- * A picked turret held by the fingers (#25): one finger moves it, two fingers set its arc (spread) and facing (turn).
- * `base` is where facing and arc stood when the fingers went down; `blocked` the cell under the finger it cannot take.
+ * A picked turret held by the fingers (#25): one finger moves it, two fingers turn it.
+ * `base` is where the facing stood when the fingers went down; `blocked` the cell under the finger it cannot take.
  */
-let held: { base: { facing: number; arc: number }; blocked?: Point } | undefined;
+let held: { base: { facing: number }; blocked?: Point } | undefined;
 /** The cell a tap just built on: a double tap there keeps the new turret instead of removing it. */
 let builtByTap: Point | undefined;
 const pickedNow = () => (phase === "prepare" && picked && placements.includes(picked) ? picked : undefined);
@@ -156,7 +154,7 @@ const nearPicked = (p: Pt, cells: number) => {
 };
 function hold(): true {
   const t = pickedNow()!;
-  held = { base: { facing: t.facing ?? 0, arc: t.arc ?? 360 } };
+  held = { base: { facing: t.facing ?? 0 } };
   return true;
 }
 const coarse = matchMedia("(pointer: coarse)").matches;
@@ -205,7 +203,6 @@ attachGestures(canvas, {
     const t = pickedNow();
     if (!t || !held) return;
     t.facing = turnedFacing(held.base.facing, tw.rot);
-    t.arc = spreadArc(held.base.arc, tw.k);
     rebuildWorld();
     renderTools();
   },
@@ -237,7 +234,7 @@ attachGestures(canvas, {
       if (placements[i] === picked) picked = undefined;
       placements.splice(i, 1);
     } else if (selected && canPlace(level, arsenal, placements, { ...cell, kind: selected })) {
-      const placed: Placement = { ...cell, kind: selected, ...draft };
+      const placed: Placement = { ...cell, kind: selected, facing: draft.facing ?? autoFacing(cell) };
       placements.push(placed);
       if (touch) {
         picked = placed;
@@ -255,18 +252,16 @@ attachGestures(canvas, {
   },
 });
 
+const autoFacing = (c: Point) => facingToWater(level.map.cells, level.map.width, level.map.height, c.x, c.y, WATER);
+
 /** What the turret tools act on: the picked turret, else the next one placed. */
-const toolTarget = (): { facing?: number; arc?: number } => (picked && placements.includes(picked) ? picked : draft);
-function turn(t: { facing?: number; arc?: number }, by: number) {
+const toolTarget = (): { facing?: number } => (picked && placements.includes(picked) ? picked : draft);
+function turn(t: { facing?: number }, by: number) {
   t.facing = ((((t.facing ?? 0) + by) % 360) + 360) % 360;
   toolDone(t);
 }
-function narrow(t: { facing?: number; arc?: number }) {
-  t.arc = nextArc(t.arc ?? 360);
-  toolDone(t);
-}
-function toolDone(t: { facing?: number; arc?: number }) {
-  if (t !== draft) draft = { facing: t.facing ?? 0, arc: t.arc ?? 360 };
+function toolDone(t: { facing?: number }) {
+  if (t !== draft) draft = { facing: t.facing ?? 0 };
   rebuildWorld();
   renderTools();
 }
@@ -277,12 +272,10 @@ function renderTools() {
   if (!show) return;
   const t = toolTarget();
   $("tools-label").textContent = t === draft ? "Neues" : "Gewählt";
-  $("arc").textContent = `${t.arc ?? 360}°`;
   $<HTMLButtonElement>("remove").disabled = t === draft;
 }
 $("turn-left").addEventListener("click", () => phase === "prepare" && turn(toolTarget(), -45));
 $("turn-right").addEventListener("click", () => phase === "prepare" && turn(toolTarget(), 45));
-$("arc").addEventListener("click", () => phase === "prepare" && narrow(toolTarget()));
 $("remove").addEventListener("click", () => {
   const i = picked ? placements.indexOf(picked) : -1;
   if (phase !== "prepare" || i < 0) return;
@@ -298,7 +291,7 @@ if (coarse) document.querySelector("#research .legend")!.textContent = "Zwei Fin
 // Safari zooms the whole page on a pinch unless told not to.
 document.addEventListener("gesturestart", (ev) => ev.preventDefault());
 
-/** R turns the turret under the cursor (or the picked one, or the next one placed) by 45°, A narrows its swivel arc. */
+/** R turns the turret under the cursor (or the picked one, or the next one placed) by 45° (Shift: back). */
 addEventListener("keydown", (ev) => {
   if (ev.key === "0" || ev.key === "Home") view = { ...fitted };
   if (ev.key === " " && phase === "run") {
@@ -309,11 +302,10 @@ addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") closePanels();
   if (phase !== "prepare") return;
   const key = ev.key.toLowerCase();
-  if (key !== "r" && key !== "a") return;
+  if (key !== "r") return;
   const i = cursor ? placedAt(cursor) : -1;
   const target = i >= 0 ? placements[i]! : toolTarget();
-  if (key === "r") turn(target, ev.shiftKey ? -45 : 45);
-  else narrow(target);
+  turn(target, ev.shiftKey ? -45 : 45);
 });
 addEventListener("keyup", (ev) => ev.key === " " && phase === "run" && ev.preventDefault());
 // Number keys pick a turret kind from the bar.
@@ -521,7 +513,7 @@ $("new-game").addEventListener("click", () => {
   if (!confirm("Neues Spiel starten? Forschung, Punkte, Level und Aufstellungen werden gelöscht.")) return;
   closePanels();
   selected = undefined;
-  draft = { facing: 0, arc: 360 };
+  draft = {};
   commit(emptySave());
   openLevel(0);
   if (unlockedKinds().length === 0) {
@@ -627,16 +619,16 @@ function frame(now: number) {
     const i = placedAt(cursor);
     if (i >= 0) {
       const p = placements[i]!;
-      hover = { placement: p, valid: true, range: arsenal.turrets[p.kind]!.stats.range, existing: true };
+      hover = { placement: p, valid: true, range: arsenal.turrets[p.kind]!.stats.range, arc: arsenal.turrets[p.kind]!.stats.arc, existing: true };
     } else if (selected) {
-      const p: Placement = { ...cursor, kind: selected, ...draft };
-      hover = { placement: p, valid: canPlace(level, arsenal, placements, p), range: arsenal.turrets[selected]!.stats.range, existing: false };
+      const p: Placement = { ...cursor, kind: selected, facing: draft.facing ?? autoFacing(cursor) };
+      hover = { placement: p, valid: canPlace(level, arsenal, placements, p), range: arsenal.turrets[selected]!.stats.range, arc: arsenal.turrets[selected]!.stats.arc, existing: false };
     }
   }
   if (held?.blocked && picked) {
     hover = { placement: { ...picked, ...held.blocked }, valid: false, range: 0, existing: true };
   } else if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
-    hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
+    hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, arc: arsenal.turrets[picked.kind]!.stats.arc, existing: true };
   }
   preview.place(view, dpr(), phase !== "run");
   drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, fxTime, { hover, arcs: phase === "prepare", trail, dpr: dpr() });

@@ -61,7 +61,7 @@ describe("saver", () => {
 
 describe("export and import", () => {
   it("round-trips a save through the file text", () => {
-    const s = { ...emptySave(), points: 7, research: ["cannon", "cannon-path-1"], unlockedLevel: 2, levels: { 0: { won: true, perfect: false, placements: [{ x: 3, y: 4, kind: "cannon" as const, facing: 90, arc: 180 }] } } };
+    const s = { ...emptySave(), points: 7, research: ["cannon", "cannon-path-1"], unlockedLevel: 2, levels: { 0: { won: true, perfect: false, placements: [{ x: 3, y: 4, kind: "cannon" as const, facing: 90 }] } } };
     expect(importText(exportText(s))).toEqual(s);
   });
 

@@ -20,6 +20,8 @@ export type Effect =
   | { kind: "range"; turret: TurretKind; add: number }
   | { kind: "damage"; turret: TurretKind; mul: number }
   | { kind: "turnRate"; turret: TurretKind; mul: number }
+  /** Widens the swivel arc by degrees (#41); the arc is capped at MAX_ARC. */
+  | { kind: "arc"; turret: TurretKind; add: number }
   | { kind: "pattern"; turret: TurretKind; field: PatternField; add: number }
   | { kind: "abilityUnlock" }
   | { kind: "abilityDamage"; mul: number }
@@ -329,7 +331,8 @@ function CHAINS(k: TurretKind): Chain[] {
     // #21: the mass scales, not the toughness — this chain feeds throughput; damage only at its milestones, moderate.
     { id: "dmg", name: "Munition", notableName: "Hartkern", keystoneName: "Vernichter", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.04 }], notable: [{ kind: "damage", turret: k, mul: 1.15 }], keystone: [{ kind: "damage", turret: k, mul: 1.5 }, { kind: "capacity", turret: k, add: 2 }] },
     { id: "range", name: "Reichweite", notableName: "Weitsicht", keystoneName: "Horizont", length: 10, small: [{ kind: "range", turret: k, add: 0.2 }], smallAlt: areaStep(k), notable: [{ kind: "range", turret: k, add: 1 }], keystone: [{ kind: "range", turret: k, add: 4 }] },
-    { id: "turn", name: "Schwenken", notableName: "Servoantrieb", keystoneName: "Rundumblick", length: 8, small: [{ kind: "turnRate", turret: k, mul: 1.15 }], notable: [{ kind: "turnRate", turret: k, mul: 1.8 }], keystone: [{ kind: "turnRate", turret: k, mul: 4 }] },
+    // #41: the arc starts at 20° and this chain widens it: 6 small (+12°), 1 notable (+40°), the keystone (+48°) = 180°.
+    { id: "turn", name: "Schwenkbereich", notableName: "Servoantrieb", keystoneName: "Weitwinkel", length: 8, small: [{ kind: "arc", turret: k, add: 12 }], notable: [{ kind: "arc", turret: k, add: 40 }, { kind: "turnRate", turret: k, mul: 1.5 }], keystone: [{ kind: "arc", turret: k, add: 48 }, { kind: "turnRate", turret: k, mul: 2 }] },
   ];
 }
 

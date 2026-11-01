@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_ARC, nextArc, spreadArc, turnedFacing } from "../../src/ui/turretEdit.ts";
+import { facingToWater, turnedFacing } from "../../src/ui/turretEdit.ts";
 
 describe("turret editing (#25)", () => {
   it("turns by the finger angle in 15° steps and wraps", () => {
@@ -8,19 +8,21 @@ describe("turret editing (#25)", () => {
     expect(turnedFacing(10, (-30 * Math.PI) / 180)).toBe(345);
     expect(turnedFacing(350, (10 * Math.PI) / 180)).toBe(0);
   });
+});
 
-  it("widens and narrows the arc with the spread, in 15° steps, between 30° and 360°", () => {
-    expect(spreadArc(120, 1.5)).toBe(180);
-    expect(spreadArc(120, 0.5)).toBe(60);
-    expect(spreadArc(90, 0.1)).toBe(MIN_ARC);
-    expect(spreadArc(180, 3)).toBe(360);
-    expect(spreadArc(100, 1)).toBe(105);
+describe("facing towards the water (#41)", () => {
+  // Row 0..4, water in the east columns 5..9 only.
+  const w = 10;
+  const h = 5;
+  const cells = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 5; x < w; x++) cells[y * w + x] = 1;
+  it("looks at the water", () => {
+    expect(facingToWater(cells, w, h, 3, 2, 1)).toBe(0);
+    const west = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < 2; x++) west[y * w + x] = 1;
+    expect(facingToWater(west, w, h, 4, 2, 1)).toBe(180);
   });
-
-  it("the arc button steps to the next narrower stop, also from an arc set by fingers", () => {
-    expect(nextArc(360)).toBe(180);
-    expect(nextArc(60)).toBe(360);
-    expect(nextArc(105)).toBe(90);
-    expect(nextArc(30)).toBe(360);
+  it("keeps 0 with no water near", () => {
+    expect(facingToWater(new Uint8Array(w * h), w, h, 3, 2, 1)).toBe(0);
   });
 });

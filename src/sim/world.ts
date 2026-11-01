@@ -84,11 +84,10 @@ export interface Ability {
   cooldown: number;
 }
 
-/** A turret as the player placed it. Facing and arc in degrees; 0 is east, 90 south. */
+/** A turret as the player placed it. Facing in degrees (0 is east, 90 south); the arc comes from research (#41). */
 export interface Placement extends Point {
   kind: TurretKind;
   facing?: number;
-  arc?: number;
 }
 
 /** A simulated blob: `size` enemies of one type moving together. */
@@ -304,7 +303,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       const facing = rad(p.facing ?? 0);
       w.turrets.push({
         placement: p, kind: p.kind, stats: kind.stats, pattern: kind.pattern ?? type.pattern, damageType: type.damageType,
-        x: p.x + 0.5, y: p.y + 0.5, facing, arc: rad(p.arc ?? 360), aim: facing,
+        x: p.x + 0.5, y: p.y + 0.5, facing, arc: rad(kind.stats.arc ?? 360), aim: facing,
         ready: Math.max(0, 1 - kind.stats.shotsPerSecond * DT),
         kills: 0,
         damage: 0,

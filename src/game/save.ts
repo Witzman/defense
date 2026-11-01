@@ -79,7 +79,7 @@ function readPlacement(raw: unknown): Placement[] {
   const kind = p.kind ?? "cannon";
   if (typeof kind !== "string" || !KINDS.has(kind)) return [];
   const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
-  return [{ x: p.x as number, y: p.y as number, kind: kind as TurretKind, facing: num(p.facing, 0), arc: num(p.arc, 360) }];
+  return [{ x: p.x as number, y: p.y as number, kind: kind as TurretKind, facing: num(p.facing, 0) }];
 }
 
 function progress(s: Save, level: number): LevelProgress {
@@ -87,7 +87,7 @@ function progress(s: Save, level: number): LevelProgress {
 }
 
 export function setPlacements(s: Save, level: number, placements: readonly Placement[]): Save {
-  return { ...s, levels: { ...s.levels, [level]: { ...progress(s, level), placements: placements.map((p) => ({ facing: 0, arc: 360, ...p })) } } };
+  return { ...s, levels: { ...s.levels, [level]: { ...progress(s, level), placements: placements.map((p) => ({ facing: 0, ...p })) } } };
 }
 
 export interface RunResult {

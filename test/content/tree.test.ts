@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROOT, TREE } from "../../src/content/tree.ts";
 import { TURRET_TYPES } from "../../src/content/turrets.ts";
+import { deriveArsenal } from "../../src/game/research.ts";
 
 const byId = new Map(TREE.map((n) => [n.id, n]));
 
@@ -74,5 +75,18 @@ describe("research tree", () => {
       expect(n.name.length).toBeGreaterThan(0);
       if (n.id !== ROOT) expect(n.effects.length, n.id).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("swivel arc (#41)", () => {
+  const ids = (k: string) => TREE.filter((n) => n.id.startsWith(`${k}-turn-`)).map((n) => n.id);
+
+  it("starts narrow and the chain widens it to 180°, never beyond", () => {
+    expect(deriveArsenal(["cannon"]).turrets.cannon!.stats.arc).toBe(20);
+    const all = ["cannon", ...ids("cannon")];
+    expect(deriveArsenal(all).turrets.cannon!.stats.arc).toBe(180);
+    expect(deriveArsenal([...all, ...all]).turrets.cannon!.stats.arc).toBe(180);
+    const half = ["cannon", ...ids("cannon").slice(0, 3)];
+    expect(deriveArsenal(half).turrets.cannon!.stats.arc).toBe(56);
   });
 });

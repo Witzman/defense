@@ -102,3 +102,80 @@ export function mapLabels(map: GameMap, field: Field, seed: number): Label[] {
   map.spawns.forEach((s, i) => place(s, map.spawns.length > 1 ? `Quelle ${i + 1}` : "Quelle"));
   return labels;
 }
+
+/** An axis-aligned box in screen pixels. */
+export interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** A label to place: its wanted centre and its text box size, in screen pixels. */
+export interface LabelBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Where a label ended up: its centre, or hidden. */
+export interface Placed {
+  x: number;
+  y: number;
+  visible: boolean;
+}
+
+/** Tried in this order, in units of (w / 2 + h, h + gap): where the name was meant to be, then above, below, right, left, then further out. */
+const TRIES = [
+  [0, 0],
+  [0, -1],
+  [0, 1],
+  [1, 0],
+  [-1, 0],
+  [0, -2],
+  [0, 2],
+] as const;
+
+const hits = (x0: number, y0: number, x1: number, y1: number, b: Box) => x0 < b.x1 && x1 > b.x0 && y0 < b.y1 && y1 > b.y0;
+
+/**
+ * Lettering that keeps clear of markers, turrets and each other (#38). Labels are placed in the given order (earlier
+ * wins); each takes the first spot from TRIES whose box hits no obstacle and no label placed before it, else it is
+ * hidden. Writes into `out` (reused across frames, grown as needed) and allocates nothing else; `n` and `nObstacles`
+ * let the caller keep pools longer than what is used.
+ */
+export function placeLabels(labels: readonly LabelBox[], obstacles: readonly Box[], out: Placed[], gap = 2, n = labels.length, nObstacles = obstacles.length) {
+  while (out.length < n) out.push({ x: 0, y: 0, visible: false });
+  for (let i = 0; i < n; i++) {
+    const l = labels[i]!;
+    const p = out[i]!;
+    p.visible = false;
+    const hw = l.w / 2;
+    const hh = l.h / 2;
+    const stepX = hw + l.h;
+    const stepY = l.h + gap;
+    for (const [tx, ty] of TRIES) {
+      const x = l.x + tx * stepX;
+      const y = l.y + ty * stepY;
+      const x0 = x - hw;
+      const y0 = y - hh;
+      const x1 = x + hw;
+      const y1 = y + hh;
+      let free = true;
+      for (let k = 0; k < nObstacles && free; k++) if (hits(x0, y0, x1, y1, obstacles[k]!)) free = false;
+      for (let k = 0; k < i && free; k++) {
+        const q = out[k]!;
+        if (!q.visible) continue;
+        const o = labels[k]!;
+        if (x0 < q.x + o.w / 2 + gap && x1 + gap > q.x - o.w / 2 && y0 < q.y + o.h / 2 + gap && y1 + gap > q.y - o.h / 2) free = false;
+      }
+      if (free) {
+        p.x = x;
+        p.y = y;
+        p.visible = true;
+        break;
+      }
+    }
+  }
+}

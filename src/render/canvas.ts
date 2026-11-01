@@ -1,32 +1,9 @@
-import { LAND, cellAt, type GameMap, type Point } from "../sim/map.ts";
-import type { Placement, World } from "../sim/world.ts";
-import { ENEMY_TYPES } from "../content/enemies.ts";
+import type { GameMap, Point } from "../sim/map.ts";
+import type { Placement, Shot, World } from "../sim/world.ts";
 import { turretType, type TurretKind } from "../content/turrets.ts";
-
-const ENEMY_COLORS = new Map(ENEMY_TYPES.map((t) => [t.id, t] as const));
-const RGB = new Map(ENEMY_TYPES.map((t) => [t.id, hexToRgb(t.color)] as const));
-
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** Flat style after the owner's reference (ref-5): light islands on dark water. */
-export const COLORS = {
-  water: "#14213d",
-  waterLine: "#1c2c50",
-  land: "#5fb8b4",
-  shore: "#3f8f8c",
-  enemy: "#a7d64a",
-  enemyEdge: "#6f9a24",
-  goal: "#e2483d",
-  spawn: "#f2c14e",
-  turret: "#2b2d42",
-  turretRing: "#edf2f4",
-  shot: "rgba(255,255,255,0.85)",
-  range: "rgba(255,255,255,0.18)",
-  invalid: "rgba(226,72,61,0.5)",
-};
+import { drawTerrain, shoreField, PAPER } from "./terrain.ts";
+import { Fluid } from "./fluid.ts";
+import { GLASS, SIGNAL } from "./theme.ts";
 
 export interface View {
   scale: number;
@@ -47,46 +24,34 @@ export function zoomAt(view: View, sx: number, sy: number, factor: number, min: 
   return { scale, ox: sx - (sx - view.ox) * k, oy: sy - (sy - view.oy) * k };
 }
 
-/** How far the drawn shore reaches into a water cell, in cells; see SHORE_GAP in the simulation. */
-const LAND_REACH = 0.12;
-
-/** Pixels per cell above which enemies are drawn one by one; below FIELD_SCALE only the density field shows. */
-export const BLOB_SCALE = 14;
-export const FIELD_SCALE = 7;
-
 export function screenToCell(view: View, sx: number, sy: number): Point {
   return { x: Math.floor((sx - view.ox) / view.scale), y: Math.floor((sy - view.oy) / view.scale) };
 }
 
-/** The map does not change during a run: draw it once into an offscreen canvas. */
-export function drawTerrain(map: GameMap, scale: number): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = Math.ceil(map.width * scale);
-  c.height = Math.ceil(map.height * scale);
-  const g = c.getContext("2d")!;
-  g.fillStyle = COLORS.water;
-  g.fillRect(0, 0, c.width, c.height);
-  // Land as rounded blobs so islands read as organic shapes, not squares. The shore reaches only LAND_REACH into a
-  // water cell, so blobs (kept SHORE_GAP off the edge by the simulation) never overlap an island (#11).
-  const landAt = (x: number, y: number) => cellAt(map, x, y) === LAND;
-  const island = (r: number) => {
-    // Outside the map counts as land (cellAt): the playing field is a lake framed by shore.
-    for (let y = -1; y <= map.height; y++)
-      for (let x = -1; x <= map.width; x++) {
-        if (!landAt(x, y)) continue;
-        disc(g, (x + 0.5) * scale, (y + 0.5) * scale, r * scale);
-        // Neighbouring land joins with a straight edge instead of a chain of beads.
-        if (landAt(x + 1, y)) g.fillRect((x + 0.5) * scale, (y + 0.5 - r) * scale, scale, 2 * r * scale);
-        if (landAt(x, y + 1)) g.fillRect((x + 0.5 - r) * scale, (y + 0.5) * scale, 2 * r * scale, scale);
-        // A 2×2 block of land: fill the hole the four discs leave in its middle.
-        if (landAt(x + 1, y) && landAt(x, y + 1) && landAt(x + 1, y + 1)) g.fillRect((x + 0.5) * scale, (y + 0.5) * scale, scale, scale);
-      }
-  };
-  g.fillStyle = COLORS.shore;
-  island(0.5 + LAND_REACH);
-  g.fillStyle = COLORS.land;
-  island(0.5 + LAND_REACH - 0.07);
-  return c;
+/** What stays the same for a whole level: the drawn map and the liquid's buffers. */
+export interface Scene {
+  terrain: HTMLCanvasElement;
+  fluid: Fluid;
+}
+
+export function createScene(map: GameMap): Scene {
+  const field = shoreField(map);
+  return { terrain: drawTerrain(map, field), fluid: new Fluid(field, map.width, map.height) };
+}
+
+/** Ticks of fire kept for the afterglow: shots fade over this many ticks instead of blinking for one. */
+export const TRAIL_TICKS = 6;
+
+/** The fire of the last ticks, oldest first; the frame loop pushes one entry per simulation tick. */
+export class Trail {
+  readonly ticks: (readonly Shot[])[] = [];
+  push(shots: readonly Shot[]) {
+    this.ticks.push(shots);
+    if (this.ticks.length > TRAIL_TICKS) this.ticks.shift();
+  }
+  clear() {
+    this.ticks.length = 0;
+  }
 }
 
 export interface Overlay {
@@ -94,105 +59,187 @@ export interface Overlay {
   hover?: { placement: Placement; valid: boolean; range: number; existing: boolean };
   /** Show every turret's swivel arc (preparation). */
   arcs?: boolean;
+  /** Recent fire; without it only this tick's shots show. */
+  trail?: Trail;
 }
 
-export function drawWorld(g: CanvasRenderingContext2D, view: View, terrain: HTMLCanvasElement, w: World, alpha: number, time: number, overlay: Overlay) {
+export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene, w: World, alpha: number, time: number, overlay: Overlay) {
   const { scale: s, ox, oy } = view;
-  g.fillStyle = COLORS.land;
+  g.fillStyle = PAPER;
   g.fillRect(0, 0, g.canvas.width, g.canvas.height);
   const map = w.level.map;
   g.imageSmoothingEnabled = true;
-  g.drawImage(terrain, ox, oy, map.width * s, map.height * s);
+  g.drawImage(scene.terrain, ox, oy, map.width * s, map.height * s);
   const at = (x: number, y: number) => [ox + x * s, oy + y * s] as const;
 
-  // Spawns and goals; a goal fades as its energy drains. Markers keep a minimum size so they read from afar.
-  const marker = Math.max(s, 6);
-  g.fillStyle = COLORS.spawn;
-  for (const p of map.spawns) disc(g, ...at(p.x + 0.5, p.y + 0.5), marker * 0.6);
-  const pulse = 1 + 0.08 * Math.sin(time * 4);
+  // Spawns as springs (rings welling outward), goals as harbours that fade as their energy drains.
+  // Markers keep a minimum size so they read from afar.
+  const marker = Math.max(s, 8);
+  g.strokeStyle = SIGNAL.spawn;
+  g.lineWidth = Math.max(2.5, s * 0.1);
+  for (const p of map.spawns) {
+    const [x, y] = at(p.x + 0.5, p.y + 0.5);
+    for (let r = 0; r < 3; r++) {
+      const t = (r + ((time * 0.6) % 1)) / 3;
+      g.globalAlpha = 0.9 * (1 - t);
+      ring(g, x, y, marker * (0.25 + t * 1.1));
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = SIGNAL.spawnCore;
+    disc(g, x, y, marker * 0.3);
+    ring(g, x, y, marker * 0.3);
+  }
+  g.globalAlpha = 1;
   map.goals.forEach((p, i) => {
-    g.globalAlpha = 0.35 + 0.65 * Math.max(0, w.energies[i]! / w.level.goalEnergy);
-    g.fillStyle = COLORS.goal;
-    polygon(g, ...at(p.x + 0.5, p.y + 0.5), marker * 1.1 * pulse, 8);
+    const [x, y] = at(p.x + 0.5, p.y + 0.5);
+    const full = Math.max(0, w.energies[i]! / w.level.goalEnergy);
+    g.globalAlpha = 0.35 + 0.65 * full;
+    g.fillStyle = SIGNAL.goal;
+    g.strokeStyle = SIGNAL.goalEdge;
+    g.lineWidth = Math.max(1.5, s * 0.07);
+    disc(g, x, y, marker * 0.85);
+    ring(g, x, y, marker * 0.85);
+    g.fillStyle = SIGNAL.goalCore;
+    disc(g, x, y, marker * 0.32);
+    const t = (time / 1.6) % 1;
+    g.globalAlpha *= 1 - t;
+    g.strokeStyle = SIGNAL.goal;
+    ring(g, x, y, marker * (0.9 + t * 0.8));
     g.globalAlpha = 1;
   });
 
-  // Enemies: one by one up close, a smooth density field from afar, both in between.
-  const blobs = Math.min(1, Math.max(0, (s - FIELD_SCALE) / (BLOB_SCALE - FIELD_SCALE)));
-  if (blobs < 1) {
-    g.globalAlpha = 1 - blobs * 0.7;
-    drawDensity(g, w, view);
-    g.globalAlpha = 1;
-  }
-  if (blobs > 0) {
-    g.globalAlpha = blobs;
-    g.lineWidth = Math.max(1, s * 0.06);
-    const minX = -ox / s - 1;
-    const maxX = (g.canvas.width - ox) / s + 1;
-    const minY = -oy / s - 1;
-    const maxY = (g.canvas.height - oy) / s + 1;
-    for (const e of w.enemies) {
-      const x = e.px + (e.x - e.px) * alpha;
-      const y = e.py + (e.y - e.py) * alpha;
-      if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      const t = ENEMY_COLORS.get(e.type)!;
-      g.fillStyle = t.color;
-      g.strokeStyle = t.edge;
-      // A packet of many reads a little bigger than a single enemy.
-      blob(g, ...at(x, y), s * 0.3 * (1 + Math.min(0.6, Math.log10(e.size) * 0.3)), time + e.id * 1.7);
-    }
-    g.globalAlpha = 1;
-  }
+  scene.fluid.draw(g, w, view, alpha);
 
-  // Turrets, with their swivel arc while preparing.
-  for (const t of w.turrets) {
-    const [x, y] = at(t.x, t.y);
-    if (overlay.arcs) drawArc(g, x, y, t.placement, t.stats.range * s, t.kind);
-    drawTurret(g, x, y, s, t.kind, t.aim);
-  }
+  // Range of every turret while preparing, then the turrets themselves.
+  if (overlay.arcs) for (const t of w.turrets) drawArc(g, ...at(t.x, t.y), t.placement, t.stats.range * s, t.kind);
+  for (const t of w.turrets) drawTurret(g, ...at(t.x, t.y), s, t.kind, t.aim);
 
-  // Shots of the last tick.
-  for (const shot of w.shots) {
-    if (shot.kind === "tracer") {
-      g.strokeStyle = turretType(shot.turret).color;
-      g.lineWidth = Math.max(1, s * (shot.turret === "laser" ? 0.09 : 0.05));
-      g.beginPath();
-      g.moveTo(...at(shot.from.x, shot.from.y));
-      g.lineTo(...at(shot.to.x, shot.to.y));
-      g.stroke();
-    } else if (shot.kind === "blast") {
-      g.fillStyle = "rgba(255, 210, 120, 0.45)";
-      disc(g, ...at(shot.at.x, shot.at.y), shot.radius * s);
-    } else {
-      const [x, y] = at(shot.from.x, shot.from.y);
-      g.fillStyle = "rgba(255, 123, 57, 0.35)";
-      g.beginPath();
-      g.moveTo(x, y);
-      g.arc(x, y, shot.range * s, shot.aim - shot.angle / 2, shot.aim + shot.angle / 2);
-      g.closePath();
-      g.fill();
-    }
-  }
+  // Fire with afterglow: older ticks fainter.
+  const ticks = overlay.trail?.ticks.length ? overlay.trail.ticks : [w.shots];
+  ticks.forEach((shots, k) => {
+    const age = (ticks.length - 1 - k) / ticks.length;
+    for (const shot of shots) drawShot(g, shot, at, s, age, time);
+  });
+  g.globalAlpha = 1;
 
   if (overlay.hover) {
     const { placement: p, valid, range, existing } = overlay.hover;
     const [cx, cy] = at(p.x + 0.5, p.y + 0.5);
     if (!valid) {
-      g.fillStyle = COLORS.invalid;
+      g.fillStyle = SIGNAL.invalid;
       disc(g, cx, cy, s * 0.5);
     } else {
-      drawArc(g, cx, cy, p, range * s, p.kind, 0.3);
+      drawArc(g, cx, cy, p, range * s, p.kind, 2);
       if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6);
     }
   }
 }
 
-/** Range and swivel arc of a placement: a full disc, or a wedge around its facing. */
-function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement, r: number, kind: TurretKind, alpha = 0.12) {
+/**
+ * One shot at `age` (0 = this tick, towards 1 = about to vanish). Every effect has a dark rim, so it reads on the pale
+ * map and on the bright mass alike.
+ */
+function drawShot(g: CanvasRenderingContext2D, shot: Shot, at: (x: number, y: number) => readonly [number, number], s: number, age: number, time: number) {
+  const fade = 1 - age;
+  g.lineCap = "round";
+  if (shot.kind === "tracer") {
+    const color = turretType(shot.turret).color;
+    const [x0, y0] = at(shot.from.x, shot.from.y);
+    const [x1, y1] = at(shot.to.x, shot.to.y);
+    if (shot.turret === "laser" || shot.turret === "railgun") {
+      // A beam: dark rim, wide coloured glow, white-hot core.
+      line(g, x0, y0, x1, y1, GLASS.rim, Math.max(5, s * 0.34), 0.5 * fade);
+      line(g, x0, y0, x1, y1, color, Math.max(4, s * 0.26), 0.6 * fade);
+      line(g, x0, y0, x1, y1, "#ffffff", Math.max(1.5, s * 0.08), fade);
+    } else if (shot.turret === "tesla") {
+      // A bolt that crackles: a new zigzag every frame.
+      const pts: [number, number][] = [[x0, y0]];
+      const segs = 6;
+      for (let i = 1; i < segs; i++) {
+        const t = i / segs;
+        pts.push([x0 + (x1 - x0) * t + (Math.random() - 0.5) * s * 0.5, y0 + (y1 - y0) * t + (Math.random() - 0.5) * s * 0.5]);
+      }
+      pts.push([x1, y1]);
+      path(g, pts, GLASS.rim, Math.max(3.5, s * 0.16), 0.5 * fade);
+      path(g, pts, color, Math.max(2, s * 0.09), fade);
+      path(g, pts, "#ffffff", Math.max(1, s * 0.03), fade);
+    } else {
+      // A bolt near its target, with a faint trace back to the barrel; it flies on as it fades.
+      line(g, x0, y0, x1, y1, color, Math.max(1, s * 0.04), 0.35 * fade);
+      const bx = x0 + (x1 - x0) * (0.55 + 0.25 * age);
+      const by = y0 + (y1 - y0) * (0.55 + 0.25 * age);
+      line(g, bx, by, x1, y1, GLASS.rim, Math.max(4, s * 0.17), 0.55 * fade);
+      line(g, bx, by, x1, y1, color, Math.max(2.5, s * 0.11), fade);
+    }
+    // Impact: a flash that throws sparks.
+    sparks(g, x1, y1, s, age, x0 + y0);
+  } else if (shot.kind === "blast") {
+    const [x, y] = at(shot.at.x, shot.at.y);
+    const r = shot.radius * s * (0.55 + age * 0.75);
+    // The fireball only while fresh: gradients are the costliest thing drawn, the ring alone carries the afterglow.
+    if (age < 0.35) {
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, `rgba(255, 244, 200, ${0.9 * fade})`);
+      grad.addColorStop(0.55, `rgba(255, 150, 60, ${0.55 * fade})`);
+      grad.addColorStop(1, "rgba(255, 110, 40, 0)");
+      g.globalAlpha = 1;
+      g.fillStyle = grad;
+      disc(g, x, y, r);
+    }
+    // Shock wave: a ring that runs out as it fades.
+    g.globalAlpha = 0.45 * fade * fade;
+    g.strokeStyle = GLASS.rim;
+    g.lineWidth = Math.max(3, s * 0.12);
+    ring(g, x, y, r * 1.1);
+    g.globalAlpha = fade * fade;
+    g.strokeStyle = turretType(shot.turret).color;
+    g.lineWidth = Math.max(1.5, s * 0.06);
+    ring(g, x, y, r * 1.1);
+    sparks(g, x, y, s * 1.4, age, x * 0.37 + y);
+  } else if (age < 0.35) {
+    const [x, y] = at(shot.from.x, shot.from.y);
+    const r = shot.range * s * (0.9 + 0.1 * Math.sin(time * 40 + x));
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(255, 244, 190, ${0.9 * fade})`);
+    grad.addColorStop(0.45, `rgba(255, 123, 57, ${0.6 * fade})`);
+    grad.addColorStop(1, "rgba(200, 40, 20, 0)");
+    g.globalAlpha = 1;
+    g.fillStyle = grad;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.arc(x, y, r, shot.aim - shot.angle / 2, shot.aim + shot.angle / 2);
+    g.closePath();
+    g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
+/** A bright flash on a dark rim; as it ages it bursts into five sparks flying outward. */
+function sparks(g: CanvasRenderingContext2D, x: number, y: number, s: number, age: number, seed: number) {
+  const shrink = 1 - age * 0.5;
+  g.globalAlpha = 1 - age;
+  g.fillStyle = GLASS.rim;
+  disc(g, x, y, Math.max(3, s * 0.2) * shrink);
+  g.fillStyle = SIGNAL.spark;
+  disc(g, x, y, Math.max(2, s * 0.13) * shrink);
+  if (age <= 0) return;
+  const d = s * (0.15 + age * 0.55);
+  const r = Math.max(1, s * 0.05);
+  g.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.2566 + seed;
+    const sx = x + Math.cos(a) * d;
+    const sy = y + Math.sin(a) * d;
+    g.moveTo(sx + r, sy);
+    g.arc(sx, sy, r, 0, Math.PI * 2);
+  }
+  g.fill();
+}
+
+/** Range and swivel arc of a placement: a full disc or a wedge around its facing, with a dotted edge. */
+function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement, r: number, kind: TurretKind, emphasis = 1) {
   const arc = ((p.arc ?? 360) * Math.PI) / 180;
   const facing = ((p.facing ?? 0) * Math.PI) / 180;
-  g.globalAlpha = alpha;
-  g.fillStyle = turretType(kind).color;
   g.beginPath();
   if (arc >= 2 * Math.PI - 1e-6) g.arc(x, y, r, 0, 2 * Math.PI);
   else {
@@ -200,86 +247,69 @@ function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement
     g.arc(x, y, r, facing - arc / 2, facing + arc / 2);
     g.closePath();
   }
+  g.globalAlpha = 0.1 * emphasis;
+  g.fillStyle = turretType(kind).color;
   g.fill();
+  g.globalAlpha = Math.min(1, 0.5 * emphasis);
+  g.strokeStyle = GLASS.rim;
+  g.lineWidth = 1;
+  g.setLineDash([2, 4]);
+  g.stroke();
+  g.setLineDash([]);
   g.globalAlpha = 1;
 }
 
-let densityCanvas: HTMLCanvasElement | undefined;
-let densityImage: ImageData | undefined;
-let softCanvas: HTMLCanvasElement | undefined;
-let mix: Float32Array | undefined;
-
-/** Enemy density per cell as a small image, scaled up with smoothing: masses read as a fluid. */
-function drawDensity(g: CanvasRenderingContext2D, w: World, view: View) {
-  const { width, height } = w.level.map;
-  if (!densityCanvas || densityCanvas.width !== width || densityCanvas.height !== height) {
-    densityCanvas = document.createElement("canvas");
-    densityCanvas.width = width;
-    densityCanvas.height = height;
-    densityImage = densityCanvas.getContext("2d")!.createImageData(width, height);
-  }
-  const data = densityImage!.data;
-  // Colour per cell is the size-weighted mix of the types in it, so groups stay apart even from afar.
-  const n = width * height;
-  if (!mix || mix.length !== n * 4) mix = new Float32Array(n * 4);
-  const m = mix;
-  m.fill(0);
-  for (const e of w.enemies) {
-    const i = (Math.floor(e.y) * width + Math.floor(e.x)) * 4;
-    const [r, gg, b] = RGB.get(e.type)!;
-    m[i]! += r * e.size;
-    m[i + 1]! += gg * e.size;
-    m[i + 2]! += b * e.size;
-    m[i + 3]! += e.size;
-  }
-  for (let i = 0; i < n; i++) {
-    const d = m[i * 4 + 3]!;
-    data[i * 4] = d > 0 ? m[i * 4]! / d : 0;
-    data[i * 4 + 1] = d > 0 ? m[i * 4 + 1]! / d : 0;
-    data[i * 4 + 2] = d > 0 ? m[i * 4 + 2]! / d : 0;
-    // Any presence reads clearly; fuller cells get denser. Square root keeps thin streams visible.
-    data[i * 4 + 3] = d <= 0 ? 0 : Math.min(255, 150 + Math.sqrt(d / w.cellCapacity) * 105);
-  }
-  densityCanvas.getContext("2d")!.putImageData(densityImage!, 0, 0);
-  // Blur at low resolution melts neighbouring cells into one body (a stream, not a grid of dots) and stays cheap:
-  // the filter runs on a canvas of 4 pixels per cell, not on the screen.
-  if (!softCanvas || softCanvas.width !== width * 4 || softCanvas.height !== height * 4) {
-    softCanvas = document.createElement("canvas");
-    softCanvas.width = width * 4;
-    softCanvas.height = height * 4;
-  }
-  const soft = softCanvas.getContext("2d")!;
-  soft.clearRect(0, 0, softCanvas.width, softCanvas.height);
-  soft.filter = "blur(2px)";
-  soft.imageSmoothingEnabled = true;
-  soft.drawImage(densityCanvas, 0, 0, softCanvas.width, softCanvas.height);
-  soft.filter = "none";
-  g.imageSmoothingEnabled = true;
-  g.drawImage(softCanvas, view.ox, view.oy, width * view.scale, height * view.scale);
-}
-
-/** Ring in the kind's colour, dark body, a barrel along the aim and the kind's symbol: the same symbol as in the bar. */
+/**
+ * Dark glass disc with a ring in the kind's colour, a barrel along the aim and, up close, the kind's symbol: the same
+ * symbol as in the bar and in research (#2).
+ */
 export function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, s: number, kind: TurretKind, aim: number, opacity = 1) {
   const t = turretType(kind);
-  g.globalAlpha = opacity;
-  g.fillStyle = t.color;
-  disc(g, x, y, s * 0.45);
-  g.fillStyle = COLORS.turret;
-  disc(g, x, y, s * 0.35);
+  const r = Math.max(4, s * 0.45);
+  // Soft outer ring: the glow of the glass.
+  g.globalAlpha = 0.35 * opacity;
   g.strokeStyle = t.color;
-  g.lineWidth = Math.max(1.5, s * 0.12);
+  g.lineWidth = Math.max(2, s * 0.16);
+  ring(g, x, y, r + g.lineWidth / 2);
+  g.globalAlpha = opacity;
+  g.fillStyle = GLASS.body;
+  disc(g, x, y, r);
+  g.lineWidth = Math.max(1.5, s * 0.07);
+  ring(g, x, y, r);
+  g.lineWidth = Math.max(2, s * 0.12);
+  g.lineCap = "round";
   g.beginPath();
-  g.moveTo(x + Math.cos(aim) * s * 0.2, y + Math.sin(aim) * s * 0.2);
-  g.lineTo(x + Math.cos(aim) * s * 0.62, y + Math.sin(aim) * s * 0.62);
+  g.moveTo(x + Math.cos(aim) * r * 0.45, y + Math.sin(aim) * r * 0.45);
+  g.lineTo(x + Math.cos(aim) * s * 0.66, y + Math.sin(aim) * s * 0.66);
   g.stroke();
+  g.fillStyle = t.color;
   if (s >= 14) {
-    g.fillStyle = t.color;
-    g.font = `${Math.round(s * 0.42)}px system-ui, sans-serif`;
+    g.font = `${Math.round(s * 0.4)}px Sora, system-ui, sans-serif`;
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.fillText(t.symbol, x, y + s * 0.02);
-  }
+  } else disc(g, x, y, r * 0.3);
   g.globalAlpha = 1;
+}
+
+function line(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, color: string, width: number, alpha: number) {
+  g.globalAlpha = alpha;
+  g.strokeStyle = color;
+  g.lineWidth = width;
+  g.beginPath();
+  g.moveTo(x0, y0);
+  g.lineTo(x1, y1);
+  g.stroke();
+}
+
+function path(g: CanvasRenderingContext2D, pts: readonly (readonly [number, number])[], color: string, width: number, alpha: number) {
+  g.globalAlpha = alpha;
+  g.strokeStyle = color;
+  g.lineWidth = width;
+  g.lineJoin = "round";
+  g.beginPath();
+  for (const [x, y] of pts) g.lineTo(x, y);
+  g.stroke();
 }
 
 function disc(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
@@ -288,25 +318,8 @@ function disc(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
   g.fill();
 }
 
-function polygon(g: CanvasRenderingContext2D, x: number, y: number, r: number, n: number) {
+function ring(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
   g.beginPath();
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + Math.PI / n;
-    g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
-  g.closePath();
-  g.fill();
-}
-
-function blob(g: CanvasRenderingContext2D, x: number, y: number, r: number, phase: number) {
-  g.beginPath();
-  const n = 7;
-  for (let i = 0; i <= n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const rr = r * (1 + 0.14 * Math.sin(phase * 3 + i * 2.1));
-    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  g.closePath();
-  g.fill();
+  g.arc(x, y, r, 0, Math.PI * 2);
   g.stroke();
 }

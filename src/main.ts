@@ -8,7 +8,7 @@ import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
-import { drawTerrain, drawWorld, fitView, screenToCell, zoomAt, type View } from "./render/canvas.ts";
+import { createScene, drawWorld, fitView, screenToCell, zoomAt, Trail, type Scene, type View } from "./render/canvas.ts";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
 const g = canvas.getContext("2d")!;
@@ -38,7 +38,8 @@ let attempt = 0;
 let cursor: Point | undefined;
 let view: View;
 let fitted: View;
-let terrain: HTMLCanvasElement;
+let scene: Scene;
+const trail = new Trail();
 
 const saver = createSaver((state) => {
   const el = $("save-state");
@@ -72,7 +73,7 @@ function openLevel(i: number) {
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
   attempt = 0;
   picked = undefined;
-  terrain = drawTerrain(level.map, 24);
+  scene = createScene(level.map);
   renderPalette(); // its rows decide how much room the map gets
   fit();
   $("level").textContent = String(i + 1);
@@ -98,6 +99,7 @@ addEventListener("resize", () => level && fit());
 function prepare() {
   phase = "prepare";
   rebuildWorld();
+  trail.clear();
   banner.hidden = true;
   nextButton.hidden = true;
   startButton.textContent = "Run starten";
@@ -379,6 +381,7 @@ function frame(now: number) {
     acc += elapsed * GAME_SPEED;
     while (acc >= DT && world.status === "running") {
       step(world);
+      trail.push(world.shots);
       acc -= DT;
     }
     updateHud();
@@ -398,7 +401,7 @@ function frame(now: number) {
   if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
     hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
-  drawWorld(g, view, terrain, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare" });
+  drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare", trail });
   requestAnimationFrame(frame);
 }
 

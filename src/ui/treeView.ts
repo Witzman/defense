@@ -92,7 +92,7 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
   function draw() {
     if (!dirty) return;
     dirty = false;
-    g.fillStyle = "#11141f";
+    g.fillStyle = "#0a1624";
     g.fillRect(0, 0, canvas.width, canvas.height);
     const states = new Map(CATALOG.map((n) => [n.id, state(n)]));
     // Edges: lit between owned nodes, faint elsewhere.
@@ -115,7 +115,7 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
       const y = sy(n.y);
       if (x < -r || y < -r || x > canvas.width + r || y > canvas.height + r) continue;
       g.globalAlpha = st === "locked" ? 0.35 : 1;
-      g.fillStyle = st === "owned" ? color : "#1d2233";
+      g.fillStyle = st === "owned" ? color : "#13283a";
       g.beginPath();
       g.arc(x, y, r, 0, Math.PI * 2);
       g.fill();
@@ -136,7 +136,7 @@ export function createTreeView(canvas: HTMLCanvasElement, info: HTMLElement, get
       }
       const symbol = symbolOf(n);
       if (symbol && r >= 7 * dpr() && n.size !== "small") {
-        g.fillStyle = st === "owned" ? "#11141f" : color;
+        g.fillStyle = st === "owned" ? "#0a1624" : color;
         g.font = `${Math.round(r * 1.1)}px system-ui, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";

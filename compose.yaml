@@ -1,36 +1,10 @@
-# Flow Defense: the game server and its database. Dokploy deploys this file.
-# Required environment: POSTGRES_PASSWORD. The domain is set in Dokploy and points to app:3000.
+# Flow Defense: the game server. Dokploy deploys this file.
+# The domain is set in Dokploy and points to app:3000. The save game lives in the browser (#24): no database.
 services:
   app:
     build: .
     restart: unless-stopped
     environment:
       PORT: "3000"
-      PGHOST: db
-      PGPORT: "5432"
-      PGUSER: defense
-      PGDATABASE: defense
-      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     expose:
       - "3000"
-    depends_on:
-      db:
-        condition: service_healthy
-
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: defense
-      POSTGRES_DB: defense
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U defense -d defense"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-volumes:
-  pgdata:

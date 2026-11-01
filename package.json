@@ -13,7 +13,8 @@
     "start": "node server/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "balance": "vitest run --config vitest.balance.config.ts"
+    "balance": "vitest run --config vitest.balance.config.ts test/balance/report.run.ts",
+    "balance:search": "vitest run --config vitest.balance.config.ts test/balance/search.run.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

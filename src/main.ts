@@ -71,7 +71,7 @@ function openLevel(i: number) {
   placements = [];
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
   picked = undefined;
-  scene = createScene(level.map);
+  scene = createScene(level.map, i);
   renderPalette(); // its rows decide how much room the map gets
   fit();
   $("level").textContent = String(i + 1);
@@ -501,11 +501,13 @@ function frame(now: number) {
   } else if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
     hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
-  drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare", trail });
+  drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare", trail, dpr: dpr() });
   requestAnimationFrame(frame);
 }
 
 async function boot() {
+  // Map lettering draws on the canvas, which never asks for a font itself: load Alegreya up front (#18).
+  for (const f of ["500 13px Alegreya", "italic 500 16px Alegreya"]) void document.fonts?.load(f).catch(() => {});
   try {
     save = loadSave();
   } catch (err) {

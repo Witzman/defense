@@ -23,6 +23,12 @@ export const MAP = {
   /** The coast: a thin glowing line with a faint halo into the water. */
   coast: [120, 220, 205] as Rgb,
   coastGlow: 0.22,
+  /** Footpaths on land, dashed (OpenStreetMap). */
+  path: "rgba(210, 180, 130, 0.32)",
+  /** Map lettering (#18): waters in italics, islands and places in small capitals. */
+  labelWater: "rgba(140, 220, 210, 0.75)",
+  labelLand: "rgba(220, 232, 228, 0.72)",
+  labelHalo: "rgba(8, 18, 28, 0.85)",
   /** Grain: ± this much per channel. */
   grain: 4,
 };

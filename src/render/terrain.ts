@@ -109,17 +109,13 @@ const MAX_SCALE = 24;
 const DEPTHS = [0.9, 1.9, 3.2];
 
 /**
- * The map as an atlas sheet at night (#16, #26): dark land with beach, meadow and forest; water shaded from shallow to
- * deep with a hint of the depth lines of a sea chart; a glowing coastline. Drawn once per level.
+ * Paints rows [rowFrom, rowTo) of a piece of the map sheet into `img`: pixel (px, py) shows map point
+ * (x0 + (px + 0.5) / S, y0 + (py + 0.5) / S). The whole sheet and the sharp detail of a zoomed view (TerrainDetail)
+ * are painted by the same rules, so they line up.
  */
-export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
-  const S = Math.min(MAX_SCALE, Math.sqrt(PIXEL_BUDGET / (map.width * map.height)));
-  const c = document.createElement("canvas");
-  c.width = Math.ceil(map.width * S);
-  c.height = Math.ceil(map.height * S);
-  const g = c.getContext("2d")!;
-  const img = g.createImageData(c.width, c.height);
+function paintRows(img: ImageData, field: Field, x0: number, y0: number, S: number, rowFrom: number, rowTo: number) {
   const px = img.data;
+  const W = img.width;
   const coastPx = 0.9 / S;
   const depthPx = 0.55 / S;
   const out: number[] = [0, 0, 0];
@@ -133,10 +129,10 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
     out[1]! += (rgb[1] - out[1]!) * a;
     out[2]! += (rgb[2] - out[2]!) * a;
   };
-  for (let y = 0; y < c.height; y++) {
-    const cy = (y + 0.5) / S;
-    for (let x = 0; x < c.width; x++) {
-      const cx = (x + 0.5) / S;
+  for (let y = rowFrom; y < rowTo; y++) {
+    const cy = y0 + (y + 0.5) / S;
+    for (let x = 0; x < W; x++) {
+      const cx = x0 + (x + 0.5) / S;
       const v = field(cx, cy) + wobble(cx, cy);
       if (v > 0) {
         const t = Math.min(1, v / 4);
@@ -158,24 +154,37 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
       if (a > 0) blend(MAP.coast, 0.95 * Math.min(1, a));
       // Halo of the coast, into the water only: the shore glows, the land stays dark.
       else if (v > 0 && v < 0.6) blend(MAP.coast, MAP.coastGlow * (1 - v / 0.6) ** 2);
-      const grain = (hash(x, y) - 0.5) * MAP.grain;
-      const o = (y * c.width + x) * 4;
+      // Grain is tied to the map point, not the pixel, so sheet and detail share it.
+      const grain = (hash(Math.floor(cx * 24), Math.floor(cy * 24)) - 0.5) * MAP.grain;
+      const o = (y * W + x) * 4;
       px[o] = out[0]! + grain;
       px[o + 1] = out[1]! + grain;
       px[o + 2] = out[2]! + grain;
       px[o + 3] = 255;
     }
   }
-  g.putImageData(img, 0, 0);
-  // Forest symbols, as OpenStreetMap draws woodland: small triangles on a staggered grid.
+}
+
+/** Distance between forest symbols, in cells. */
+const TREE_STEP = 0.6;
+
+/**
+ * Symbols on top of the painted sheet, as OpenStreetMap draws them: woodland as small triangles on a staggered grid,
+ * footpaths as dashed lines over the land. Map units throughout, so sheet and detail show the same.
+ */
+function decorate(g: CanvasRenderingContext2D, map: GameMap, field: Field, x0: number, y0: number, S: number, w: number, h: number) {
+  const x1 = x0 + w / S;
+  const y1 = y0 + h / S;
   g.fillStyle = MAP.forestInk;
-  const step = Math.max(0.45, 10 / S);
-  const r = Math.min(3.5, S * 0.14);
-  for (let j = 0, cy = step / 2; cy < map.height; j++, cy += step)
-    for (let cx = step / 2 + (j % 2) * (step / 2); cx < map.width; cx += step) {
+  const r = Math.min(7, S * 0.15);
+  const j0 = Math.max(0, Math.floor(y0 / TREE_STEP) - 1);
+  for (let j = j0, cy = (j0 + 0.5) * TREE_STEP; cy < Math.min(map.height, y1 + 1); j++, cy += TREE_STEP) {
+    const shift = (j % 2) * (TREE_STEP / 2);
+    const i0 = Math.max(0, Math.floor((x0 - shift) / TREE_STEP) - 1);
+    for (let cx = (i0 + 0.5) * TREE_STEP + shift; cx < Math.min(map.width, x1 + 1); cx += TREE_STEP) {
       if (field(cx, cy) > -1.1 || noise(cx * 0.35 + 40, cy * 0.35) <= 0.58) continue;
-      const x = cx * S;
-      const y = cy * S;
+      const x = (cx - x0) * S;
+      const y = (cy - y0) * S;
       g.beginPath();
       g.moveTo(x, y - r);
       g.lineTo(x + r * 0.86, y + r * 0.6);
@@ -183,7 +192,151 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
       g.closePath();
       g.fill();
     }
+  }
+  g.strokeStyle = MAP.path;
+  g.lineWidth = Math.max(1, S * 0.06);
+  g.lineCap = "round";
+  g.setLineDash([Math.max(2, S * 0.2), Math.max(2, S * 0.16)]);
+  for (const path of footpaths(map, field)) {
+    g.beginPath();
+    for (const p of path) g.lineTo((p.x - x0) * S, (p.y - y0) * S);
+    g.stroke();
+  }
+  g.setLineDash([]);
+}
+
+const pathCache = new WeakMap<GameMap, { x: number; y: number }[][]>();
+
+/** Footpaths: walks over the inland of larger land, deterministic per map. */
+export function footpaths(map: GameMap, field: Field): { x: number; y: number }[][] {
+  const cached = pathCache.get(map);
+  if (cached) return cached;
+  const paths: { x: number; y: number }[][] = [];
+  const count = Math.round((map.width * map.height) / 400);
+  for (let k = 0; k < count * 4 && paths.length < count; k++) {
+    let x = hash(k, 7) * map.width;
+    let y = hash(7, k) * map.height;
+    if (field(x, y) > -1.6) continue;
+    let a = hash(k, k) * Math.PI * 2;
+    const path = [{ x, y }];
+    for (let s = 0; s < 60; s++) {
+      a += (hash(k, s) - 0.5) * 0.7;
+      const nx = x + Math.cos(a) * 0.5;
+      const ny = y + Math.sin(a) * 0.5;
+      // Paths keep off the beach: they turn away where the land ends.
+      if (field(nx, ny) > -0.9) {
+        a += 1.4;
+        continue;
+      }
+      x = nx;
+      y = ny;
+      path.push({ x, y });
+    }
+    if (path.length > 12) paths.push(path);
+  }
+  pathCache.set(map, paths);
+  return paths;
+}
+
+/**
+ * The map as an atlas sheet at night (#16, #26, #18): dark land with beach, meadow, woodland and footpaths; water
+ * shaded from shallow to deep with a hint of the depth lines of a sea chart; a glowing coastline. Drawn once per level.
+ */
+export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
+  const S = sheetScale(map);
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(map.width * S);
+  c.height = Math.ceil(map.height * S);
+  const g = c.getContext("2d")!;
+  const img = g.createImageData(c.width, c.height);
+  paintRows(img, field, 0, 0, S, 0, c.height);
+  g.putImageData(img, 0, 0);
+  decorate(g, map, field, 0, 0, S, c.width, c.height);
   return c;
+}
+
+/** Pixels the sharp detail of a zoomed view may have, and the time per frame it may take to paint them. */
+const DETAIL_BUDGET = 1_600_000;
+const DETAIL_MS = 4;
+/** The detail is painted once the camera is this much closer than the sheet. */
+const DETAIL_FROM = 1.4;
+
+interface DetailPiece {
+  canvas: HTMLCanvasElement;
+  img: ImageData;
+  x0: number;
+  y0: number;
+  S: number;
+  key: string;
+  row: number;
+}
+
+/**
+ * Keeps the map sharp up close (#18): when the camera is well closer than the sheet, the visible part is painted again
+ * at the camera's resolution, a few rows per frame so the frame rate holds; until it is done the sheet shows.
+ */
+export class TerrainDetail {
+  private map: GameMap;
+  private field: Field;
+  private sheetScale: number;
+  private shown?: DetailPiece;
+  private job?: DetailPiece;
+
+  constructor(map: GameMap, field: Field, sheetScale: number) {
+    this.map = map;
+    this.field = field;
+    this.sheetScale = sheetScale;
+  }
+
+  /** Advance the painting for the camera `view` on a canvas of cw × ch pixels, then draw what is done. */
+  draw(g: CanvasRenderingContext2D, view: { scale: number; ox: number; oy: number }) {
+    const { scale: s, ox, oy } = view;
+    if (s > this.sheetScale * DETAIL_FROM) this.work(g.canvas.width, g.canvas.height, s, ox, oy);
+    else this.job = undefined;
+    const d = this.shown;
+    if (!d || s <= this.sheetScale * DETAIL_FROM) return;
+    g.imageSmoothingEnabled = true;
+    g.drawImage(d.canvas, ox + d.x0 * s, oy + d.y0 * s, (d.canvas.width / d.S) * s, (d.canvas.height / d.S) * s);
+  }
+
+  private work(cw: number, ch: number, s: number, ox: number, oy: number) {
+    const { width: W, height: H } = this.map;
+    const x0 = Math.max(0, Math.floor(-ox / s) - 1);
+    const y0 = Math.max(0, Math.floor(-oy / s) - 1);
+    const x1 = Math.min(W, Math.ceil((cw - ox) / s) + 1);
+    const y1 = Math.min(H, Math.ceil((ch - oy) / s) + 1);
+    if (x1 <= x0 || y1 <= y0) return;
+    const S = Math.min(s, Math.sqrt(DETAIL_BUDGET / ((x1 - x0) * (y1 - y0))));
+    if (S <= this.sheetScale * 1.1) return;
+    // A new view starts a new piece; the camera standing still lets it finish.
+    const key = `${x0},${y0},${x1},${y1},${Math.round(S)}`;
+    if (this.shown?.key === key) return;
+    if (this.job?.key !== key) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil((x1 - x0) * S);
+      canvas.height = Math.ceil((y1 - y0) * S);
+      const img = canvas.getContext("2d")!.createImageData(canvas.width, canvas.height);
+      this.job = { canvas, img, x0, y0, S, key, row: 0 };
+    }
+    const job = this.job;
+    const until = performance.now() + DETAIL_MS;
+    while (job.row < job.img.height && performance.now() < until) {
+      const to = Math.min(job.img.height, job.row + 8);
+      paintRows(job.img, this.field, job.x0, job.y0, job.S, job.row, to);
+      job.row = to;
+    }
+    if (job.row < job.img.height) return;
+    const g = job.canvas.getContext("2d")!;
+    g.putImageData(job.img, 0, 0);
+    decorate(g, this.map, this.field, job.x0, job.y0, job.S, job.canvas.width, job.canvas.height);
+    this.shown = job;
+    this.job = undefined;
+  }
+}
+
+/** Pixels per cell of the sheet drawTerrain paints for a map. */
+export function sheetScale(map: GameMap): number {
+  return Math.min(MAX_SCALE, Math.sqrt(PIXEL_BUDGET / (map.width * map.height)));
 }
 
 /** Colour of the land around the map. */

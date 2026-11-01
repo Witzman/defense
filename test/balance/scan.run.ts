@@ -17,7 +17,7 @@ const tmp = mkdtempSync(join(tmpdir(), "scan-"));
 
 function one(k: number, hp: number): Promise<JobResult> {
   const save = JSON.parse(readFileSync(`balance/presets/L${level + 1}-${profile}.json`, "utf8"));
-  const job: Job = { level, profile, save, cap: Number(process.env.SCAN_CAP ?? 30), overrides: { levelHp: { [level]: hp }, levelKillValue: { [level]: kv } } };
+  const job: Job = { level, profile, save, cap: Number(process.env.SCAN_CAP ?? 30), overrides: { levelHp: { [level]: hp }, levelKillValue: { [level]: kv }, killValueScale: Number(process.env.SCAN_SCALE ?? 1) } };
   writeFileSync(join(tmp, `${k}.job.json`), JSON.stringify(job));
   return new Promise((res, rej) => {
     const c = spawn("node_modules/.bin/vitest", ["run", "--config", "vitest.balance.config.ts", "test/balance/eval.run.ts"], {

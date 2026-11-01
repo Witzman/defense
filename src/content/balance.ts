@@ -11,9 +11,9 @@ export const BALANCE = {
   hpGrowth: 1.05,
   /** Correction per level index on top of the curve (#11, found by `npm run balance:search`); missing = 1. */
   /** Level 1 (#41, #40): 20° arcs made it harder, cohesion easier; 0.8 keeps both guards of #9 green (0.7 and 0.9 do not). */
-  levelHp: { 0: 0.8, 1: 1.673, 2: 2.58, 3: 9.457, 4: 7.484, 5: 1.454, 6: 16.59, 7: 1.454, 8: 1.454 } as Record<number, number>,
+  levelHp: { 0: 0.8, 1: 1.673, 2: 4.28, 3: 8.911, 4: 5.161 } as Record<number, number>,
   /** Correction of the points per kill per level index; missing = 1. */
-  levelKillValue: { 1: 1.068, 2: 2.195, 3: 2.843, 4: 2.422, 5: 1.775, 6: 2.275, 7: 1.667, 8: 1.221 } as Record<number, number>,
+  levelKillValue: { 1: 1.068, 2: 1.492, 3: 1.14, 4: 0.8286 } as Record<number, number>,
   /** Research points per kill: scale × growth^level, so the newest level pays best. `killValueScale` lifts all levels alike. */
   killValueScale: 1,
   killValueGrowth: 1.45,

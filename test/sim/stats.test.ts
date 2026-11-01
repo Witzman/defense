@@ -14,7 +14,9 @@ const arsenal: Arsenal = {
 };
 
 function play(levelIndex: number, kinds = KINDS): World {
-  const level = LEVELS[levelIndex]!();
+  // Fixed hit points: this test counts, it must not move with the balancing (#11).
+  const base = LEVELS[levelIndex]!();
+  const level = { ...base, enemies: { ...base.enemies, hpScale: 6 * 1.05 ** levelIndex } };
   const w = createWorld(level, arsenal, placeGreedy(level, arsenal, sampleFlow(level), kinds));
   // The precision shot every few seconds at the first blob, so its bucket is used too.
   while (w.status === "running" && w.tick < 30 * 60 * 10) {

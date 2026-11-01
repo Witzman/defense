@@ -1,9 +1,25 @@
 {
  "levelHp": {
   "0": 0.8,
-  "1": 1.2
+  "1": 1.673,
+  "2": 2.58,
+  "3": 9.457,
+  "4": 7.484,
+  "5": 1.454,
+  "6": 16.59,
+  "7": 1.454,
+  "8": 1.454
  },
- "levelKillValue": {},
+ "levelKillValue": {
+  "1": 1.068,
+  "2": 2.195,
+  "3": 2.843,
+  "4": 2.422,
+  "5": 1.775,
+  "6": 2.275,
+  "7": 1.667,
+  "8": 1.221
+ },
  "levels": {
   "0": {
    "factor": 0.8,
@@ -12,10 +28,131 @@
    "inCorridor": false
   },
   "1": {
-   "factor": 1.2,
-   "killValue": 1,
-   "failures": {},
-   "inCorridor": false
+   "factor": 1.673,
+   "killValue": 1.068,
+   "failures": {
+    "generalist": 8
+   },
+   "inCorridor": true
+  },
+  "2": {
+   "factor": 2.58,
+   "killValue": 2.195,
+   "failures": {
+    "generalist": 5
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 87.2,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.49321266968325794,
+    "pointsPerMinute": 3296.559633027523,
+    "bestEarlierPerMinute": 519.4405594405595,
+    "nodes": 80
+   }
+  },
+  "3": {
+   "factor": 9.457,
+   "killValue": 2.843,
+   "failures": {
+    "generalist": 4
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 85.13333333333333,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.5281306715063521,
+    "pointsPerMinute": 16469.929522317932,
+    "bestEarlierPerMinute": 4026.0504201680665,
+    "nodes": 164
+   }
+  },
+  "4": {
+   "factor": 7.484,
+   "killValue": 2.422,
+   "failures": {
+    "generalist": 3
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 105.8,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.5152529761904762,
+    "pointsPerMinute": 42509.262759924386,
+    "bestEarlierPerMinute": 19313.22314049587,
+    "nodes": 214
+   }
+  },
+  "5": {
+   "factor": 1.454,
+   "killValue": 1.775,
+   "failures": {
+    "generalist": 0
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 73.56666666666666,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.6059006211180125,
+    "pointsPerMinute": 126980.33529678296,
+    "bestEarlierPerMinute": 45628.8129861346,
+    "nodes": 248
+   }
+  },
+  "6": {
+   "factor": 16.59,
+   "killValue": 2.275,
+   "failures": {
+    "generalist": 4
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 85.43333333333334,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.6627282491944146,
+    "pointsPerMinute": 397418.6500195084,
+    "bestEarlierPerMinute": 128494.08528198075,
+    "nodes": 429
+   }
+  },
+  "7": {
+   "factor": 1.454,
+   "killValue": 1.667,
+   "failures": {
+    "generalist": 0
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 73.56666666666666,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.5954901058444547,
+    "pointsPerMinute": 958586.0444041685,
+    "bestEarlierPerMinute": 432703.4834324554,
+    "nodes": 468
+   }
+  },
+  "8": {
+   "factor": 1.454,
+   "killValue": 1.221,
+   "failures": {
+    "generalist": 0
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 74.83333333333333,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.6108452950558214,
+    "pointsPerMinute": 1957397.7728285077,
+    "bestEarlierPerMinute": 958586.0444041685,
+    "nodes": 518
+   }
   }
  }
 }

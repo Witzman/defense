@@ -103,7 +103,7 @@ it("balancing search", async () => {
     }
     // Two knobs per level, searched in log space: hit points of the level and points per kill. Each round samples
     // VARIANTS points of a box (Halton sequence, so they spread evenly) and the next box closes in on the best one.
-    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(kvFloor(level)), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
+    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(kvFloor(level)), Math.log(kvFloor(level) * 3)] } as Record<"hp" | "kv", [number, number]>;
     const kvMin = Math.log(kvFloor(level));
     type Best = { hp: number; kv: number; results: JobResult[]; score: number };
     let best: Best | undefined;
@@ -127,7 +127,7 @@ it("balancing search", async () => {
         const rs = results.slice(k * CORRIDOR_PROFILES.length, (k + 1) * CORRIDOR_PROFILES.length);
         return { ...pt, results: rs, score: score(rs) };
       });
-      scored.sort((x, y) => x.score - y.score || dist(x) - dist(y));
+      scored.sort((x, y) => x.score - y.score || dist(x) - dist(y) || x.kv - y.kv);
       if (!best || scored[0]!.score < best.score || (scored[0]!.score === best.score && dist(scored[0]!) < dist(best))) best = scored[0]!;
       process.stdout.write(`L${level + 1} round ${round + 1}: hp ×${best.hp.toFixed(3)} kv ×${best.kv.toFixed(3)} miss ${best.score.toFixed(1)} [${best.results.map((r) => `${r.profile[0]}${r.failures}${r.won ? "" : "!"}`).join(" ")}]\n`);
       if (best.score === 0 && dist(best) <= 1) break;

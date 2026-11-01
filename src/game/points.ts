@@ -14,5 +14,5 @@ export function runPoints(levelIndex: number, killed: number, total: number): nu
 }
 
 export function valuePerKill(levelIndex: number): number {
-  return BALANCE.killValueGrowth ** levelIndex * (BALANCE.levelKillValue[levelIndex] ?? 1);
+  return BALANCE.killValueScale * BALANCE.killValueGrowth ** levelIndex * (BALANCE.levelKillValue[levelIndex] ?? 1);
 }

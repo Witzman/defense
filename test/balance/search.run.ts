@@ -66,6 +66,16 @@ function halton(n: number, base: number): number {
   return r;
 }
 
+/**
+ * Lowest points factor of a level: at least 1 point per kill, and the level pays more per kill than the one before
+ * (the newest level is the best farm, #5), whatever factor the earlier level got.
+ */
+function kvFloor(level: number): number {
+  const g = BALANCE.killValueGrowth;
+  const prev = level > 0 ? g ** (level - 1) * (BALANCE.levelKillValue[level - 1] ?? 1) : 0;
+  return Math.max(0.1, 1 / g ** level, (prev * 1.02) / g ** level);
+}
+
 const score = (rs: JobResult[]) => rs.reduce((s, r) => s + miss(r.profile, r.failures, r.won), 0);
 
 it("balancing search", async () => {
@@ -93,8 +103,8 @@ it("balancing search", async () => {
     }
     // Two knobs per level, searched in log space: hit points of the level and points per kill. Each round samples
     // VARIANTS points of a box (Halton sequence, so they spread evenly) and the next box closes in on the best one.
-    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(Math.max(0.1, 1 / BALANCE.killValueGrowth ** level)), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
-    const kvMin = Math.log(Math.max(0.1, 1 / BALANCE.killValueGrowth ** level));
+    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(kvFloor(level)), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
+    const kvMin = Math.log(kvFloor(level));
     type Best = { hp: number; kv: number; results: JobResult[]; score: number };
     let best: Best | undefined;
     const genFail = (r: JobResult[]) => r.find((q) => q.profile === "generalist")!.failures;
@@ -142,7 +152,7 @@ it("balancing search", async () => {
       best!.results.filter((r) => !r.after).map((r) => ({ level, profile: r.profile, save: presets.get(r.profile)!, overrides, cap: 60 })),
     );
     for (const r of [...best!.results, ...done]) if (r.after) presets.set(r.profile, r.after);
-    const diag = await runInProcess({ level, profile: "generalist", save: loadPreset(level, "generalist")!, overrides: { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } }, cap: 1, diag: true });
+    const diag = await runInProcess({ level, profile: "generalist", save: presets.get("generalist")!, overrides: { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } }, cap: 1, diag: true });
     state.levels[level] = { factor: state.levelHp[level]!, killValue: state.levelKillValue[level]!, failures, inCorridor: best!.score === 0, diag: diag.diag };
     writeFileSync(STATE, JSON.stringify(state, null, 1));
     for (const p of CORRIDOR_PROFILES) writeFileSync(`balance/presets/L${level + 2}-${p}.json`, JSON.stringify(presets.get(p)));

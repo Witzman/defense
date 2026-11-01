@@ -125,7 +125,8 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
 
   // Range of every turret while preparing, then the turrets themselves.
   if (overlay.arcs) for (const t of w.turrets) drawArc(g, ...at(t.x, t.y), t.placement, t.stats.range * s, t.kind);
-  for (const t of w.turrets) drawTurret(g, ...at(t.x, t.y), s, t.kind, t.aim);
+  const dpr = overlay.dpr ?? 1;
+  for (const t of w.turrets) drawTurret(g, ...at(t.x, t.y), s, t.kind, t.aim, 1, dpr);
 
   // Fire with afterglow: older ticks fainter.
   const ticks = overlay.trail?.ticks.length ? overlay.trail.ticks : [w.shots];
@@ -140,10 +141,10 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
     const [cx, cy] = at(p.x + 0.5, p.y + 0.5);
     if (!valid) {
       g.fillStyle = SIGNAL.invalid;
-      disc(g, cx, cy, s * 0.5);
+      disc(g, cx, cy, turretUnit(s, overlay.dpr ?? 1) * 0.5);
     } else {
       drawArc(g, cx, cy, p, range * s, p.kind, 2);
-      if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6);
+      if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6, overlay.dpr ?? 1);
     }
   }
 }
@@ -308,12 +309,32 @@ function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement
 }
 
 /**
- * Dark glass disc with a ring in the kind's colour, a barrel along the aim and, up close, the kind's symbol: the same
- * symbol as in the bar and in research (#2).
+ * Smallest radius of a turret's disc in CSS pixels (#36): on a large map in the overview it stays a turret. Not more,
+ * so neighbouring turrets touch rather than melt into one blob.
  */
-export function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, s: number, kind: TurretKind, aim: number, opacity = 1) {
+export const TURRET_MIN_RADIUS = 8;
+
+/**
+ * The cell size a turret is drawn at: the map's cell size `s`, but never so small that the disc gets below
+ * TURRET_MIN_RADIUS CSS pixels. Up close it is just `s`, so the close-up look does not change; the range stays to scale.
+ */
+export function turretUnit(s: number, dpr: number): number {
+  return Math.max(s, (TURRET_MIN_RADIUS * dpr) / 0.45);
+}
+
+/** How far a turret's drawing reaches from its centre (disc, glow and barrel), in canvas pixels. */
+export function turretReach(s: number, dpr: number): number {
+  return turretUnit(s, dpr) * 0.66;
+}
+
+/**
+ * Dark glass disc with a ring in the kind's colour, a barrel along the aim and the kind's symbol: the same symbol as
+ * in the bar and in research (#2). From afar it keeps a minimum size (`turretUnit`), so the symbol always reads.
+ */
+export function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, cell: number, kind: TurretKind, aim: number, opacity = 1, dpr = 1) {
   const t = turretType(kind);
-  const r = Math.max(4, s * 0.45);
+  const s = turretUnit(cell, dpr);
+  const r = s * 0.45;
   // Soft outer ring: the glow of the glass.
   g.globalAlpha = 0.35 * opacity;
   g.strokeStyle = t.color;
@@ -331,12 +352,11 @@ export function drawTurret(g: CanvasRenderingContext2D, x: number, y: number, s:
   g.lineTo(x + Math.cos(aim) * s * 0.66, y + Math.sin(aim) * s * 0.66);
   g.stroke();
   g.fillStyle = t.color;
-  if (s >= 14) {
-    g.font = `${Math.round(s * 0.4)}px Sora, system-ui, sans-serif`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(t.symbol, x, y + s * 0.02);
-  } else disc(g, x, y, r * 0.3);
+  // From afar the symbol fills more of the disc, so it reads at the minimum size; up close it keeps its old size.
+  g.font = `${Math.round(Math.max(s * 0.4, 10 * dpr))}px Sora, system-ui, sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(t.symbol, x, y + s * 0.02);
   g.globalAlpha = 1;
 }
 

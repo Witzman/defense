@@ -98,7 +98,7 @@ it("balancing search", async () => {
       const rs = await pool(CORRIDOR_PROFILES.map((profile) => ({ level, profile, save: presets.get(profile)!, cap: 60, overrides: { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } } })));
       for (const r of rs) if (r.after) presets.set(r.profile, r.after);
       for (const p of CORRIDOR_PROFILES) writeFileSync(`balance/presets/L${level + 2}-${p}.json`, JSON.stringify(presets.get(p)));
-      process.stdout.write(`L${level + 1} kept ${JSON.stringify(state.levels[level]!.failures)}\n`);
+      process.stdout.write(`L${level + 1} kept (was ${JSON.stringify(state.levels[level]!.failures)}) now ${rs.map((r) => `${r.profile} ${r.failures}${r.won ? "" : " stuck"}`).join(", ")} ${Math.round(rs[0]!.seconds)}s\n`);
       continue;
     }
     // Two knobs per level, searched in log space: hit points of the level and points per kill. Each round samples
@@ -131,11 +131,32 @@ it("balancing search", async () => {
       if (!best || scored[0]!.score < best.score || (scored[0]!.score === best.score && dist(scored[0]!) < dist(best))) best = scored[0]!;
       process.stdout.write(`L${level + 1} round ${round + 1}: hp ×${best.hp.toFixed(3)} kv ×${best.kv.toFixed(3)} miss ${best.score.toFixed(1)} [${best.results.map((r) => `${r.profile[0]}${r.failures}${r.won ? "" : "!"}`).join(" ")}]\n`);
       if (best.score === 0 && dist(best) <= 1) break;
-      // Close in: half the width of the box around the best, but never past the first box.
-      for (const key of ["hp", "kv"] as const) {
-        const half = (box[key][1] - box[key][0]) / 4;
-        const c = Math.log(best[key]);
-        box[key] = [c - half, c + half];
+      // Close in. If the generalist is inside the corridor, tighten around the best. Otherwise look for the edge: it
+      // gets failures as the level's hit points rise, up to "stuck"; search between the highest factor still below
+      // the target and the lowest at or above it; with all on one side, move the box that way.
+      const gf = (s: Best) => {
+        const r = s.results.find((q) => q.profile === "generalist")!;
+        return r.won ? r.failures : Infinity;
+      };
+      const byHp = scored.slice().sort((x, y) => x.hp - y.hp);
+      const below = byHp.filter((s) => gf(s) < CORRIDOR.generalist.target);
+      const above = byHp.filter((s) => gf(s) >= CORRIDOR.generalist.target);
+      const kvC = Math.log(best.kv);
+      if (best.score === 0) {
+        for (const key of ["hp", "kv"] as const) {
+          const half = (box[key][1] - box[key][0]) / 4;
+          const c = Math.log(best[key]);
+          box[key] = [c - half, c + half];
+        }
+      } else {
+        const lowHp = below.length ? Math.max(...below.map((s) => s.hp)) : undefined;
+        const highHp = above.length ? Math.min(...above.filter((s) => lowHp === undefined || s.hp > lowHp).map((s) => s.hp)) : undefined;
+        const width = box.hp[1] - box.hp[0];
+        if (lowHp !== undefined && highHp !== undefined && Number.isFinite(highHp)) box.hp = [Math.log(lowHp), Math.log(highHp)];
+        else if (lowHp !== undefined) box.hp = [Math.log(lowHp), Math.log(lowHp) + width];
+        else if (highHp !== undefined && Number.isFinite(highHp)) box.hp = [Math.log(highHp) - width, Math.log(highHp)];
+        const half = (box.kv[1] - box.kv[0]) / 4;
+        box.kv = [Math.max(Math.log(kvFloor(level)), kvC - half), kvC + half];
       }
     }
     BALANCE.levelHp[level] = best!.hp;

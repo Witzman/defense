@@ -3,6 +3,7 @@ import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
 import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { BALANCE } from "../content/balance.ts";
 import { countArrived, createStats, sampleEnergy, SAMPLE_TICKS, type Credit, type RunStats } from "./stats.ts";
 
 /** Simulation step in seconds. Fixed, so a run with the same seed replays exactly. */
@@ -17,6 +18,13 @@ const CONGESTION_COST = 6;
  * from 1 on the shore (depth 1) to 0 here; a type's extra cost on a cell is its depthPreference times the shallowness.
  */
 export const DEEP_WATER = 4;
+/**
+ * Danger (#39): every enemy that dies adds 1 / cell capacity to its cell; the field is blurred and fades each reroute.
+ * A cell's danger is the saturation of that sum: 0 (quiet) up to 1 (many died here lately).
+ */
+const DANGER_FADE = 0.96;
+/** Deaths (in cell capacities, smoothed over the neighbourhood) at which the danger of a cell is one half. */
+const DANGER_HALF = 4;
 /** Weight of the newest load in the smoothed congestion; the rest is memory (hysteresis). */
 const CONGESTION_SMOOTHING = 0.4;
 /** Load (share of capacity) below which a cell counts as free flowing, not congested. */
@@ -46,6 +54,8 @@ export interface LevelDef {
     speed: number;
     /** Multiplier on every type's hit points and shield in this level. */
     hpScale?: number;
+    /** How much the enemies of this level have learned to avoid places where others died, 0..1 (#39). */
+    learning?: number;
     /** Enemies one simulated blob stands for. 1 early on; large in mass levels, so the blob count stays bounded. */
     packet?: number;
   };
@@ -127,9 +137,11 @@ export type Shot =
 
 export type Status = "running" | "won" | "lost";
 
-/** The route field shared by all enemy types with the same depth preference (#27). */
+/** The route field shared by all enemy types with the same depth preference (#27) and danger avoidance (#39). */
 export interface Route {
   preference: number;
+  /** How much the type shies from places where enemies died (#39), already times the level's learning; 0 = never. */
+  avoidance: number;
   /** Cost factor per cell from shallowness, 1 + preference × shallowness; undefined when the preference is 0. */
   shore?: Float32Array;
   /** Route cost to the goal per cell, including congestion and shore. 0 at the goal. */
@@ -170,6 +182,8 @@ export interface World {
   density: Float64Array;
   /** Smoothed congestion per cell, 0 (free) to 1 (full). */
   congestion: Float32Array;
+  /** Where enemies died lately (#39), in cell capacities; blurred and fading. Read as 0..1 by `dangerAt`. */
+  danger: Float32Array;
   groups: GroupState[];
   rng: Rng;
   tick: number;
@@ -241,6 +255,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     routeOf: new Map(),
     density: new Float64Array(level.map.cells.length),
     congestion: new Float32Array(level.map.cells.length),
+    danger: new Float32Array(level.map.cells.length),
     groups,
     rng: createRng(seed),
     tick: 0,
@@ -396,7 +411,9 @@ function killTo(w: World, e: Enemy, alive: number) {
   w.active -= dead;
   w.source.kills += dead;
   w.stats.killed[e.type] = (w.stats.killed[e.type] ?? 0) + dead;
-  w.density[Math.floor(e.y) * w.level.map.width + Math.floor(e.x)]! -= dead;
+  const cell = Math.floor(e.y) * w.level.map.width + Math.floor(e.x);
+  w.density[cell]! -= dead;
+  w.danger[cell]! += dead / w.cellCapacity;
 }
 
 function sweep(w: World) {
@@ -432,15 +449,21 @@ function spawn(w: World) {
   }
 }
 
+/** Avoidance of danger of a type in this level (#39): the type's own value times what the level has taught. */
+function avoidanceOf(w: World, t: EnemyType): number {
+  return t.dangerAvoidance * (w.level.enemies.learning ?? 0);
+}
+
 /** The route of a type; a preference not seen yet gets its own field, built from the congestion as it stands. */
 function routeFor(w: World, t: EnemyType): Route {
   let route = w.routeOf.get(t.id);
   if (route) return route;
-  route = w.routes.find((r) => r.preference === t.depthPreference);
+  const avoidance = avoidanceOf(w, t);
+  route = w.routes.find((r) => r.preference === t.depthPreference && r.avoidance === avoidance);
   if (!route) {
     const shore = shoreCost(w.depth, t.depthPreference);
-    route = { preference: t.depthPreference, shore, field: new Float64Array(0) };
-    route.field = distanceField(w.level.map, w.level.map.goals, withShore(congestionCost(w), shore));
+    route = { preference: t.depthPreference, avoidance, shore, field: new Float64Array(0) };
+    route.field = distanceField(w.level.map, w.level.map.goals, routeCost(w, route, congestionCost(w)));
     w.routes.push(route);
   }
   w.routeOf.set(t.id, route);
@@ -454,13 +477,53 @@ function congestionCost(w: World): Float32Array | undefined {
   return cost;
 }
 
-/** Congestion and shore cost together; either may be absent (cost 1 everywhere). */
-function withShore(crowd: Float32Array | undefined, shore: Float32Array | undefined): Float32Array | undefined {
-  if (!shore) return crowd;
-  if (!crowd) return shore;
-  const cost = new Float32Array(crowd.length);
-  for (let i = 0; i < cost.length; i++) cost[i] = crowd[i]! * shore[i]!;
+/** Danger of a cell as 0..1 (#39): saturates, so a bloodbath is not worth more than a bad day. */
+export function dangerAt(w: World, i: number): number {
+  const d = w.danger[i]!;
+  return d / (d + DANGER_HALF);
+}
+
+/** Congestion, shore and danger together; each may be absent (cost 1 everywhere). */
+function routeCost(w: World, route: Route, crowd: Float32Array | undefined): Float32Array | undefined {
+  const { shore, avoidance } = route;
+  const scare = avoidance > 0 && w.danger.some((d) => d > 0);
+  if (!shore && !scare) return crowd;
+  const cost = new Float32Array(w.danger.length).fill(1);
+  for (let i = 0; i < cost.length; i++) {
+    let c = 1;
+    if (crowd) c *= crowd[i]!;
+    if (shore) c *= shore[i]!;
+    if (scare) c *= 1 + BALANCE.dangerCost * avoidance * dangerAt(w, i);
+    cost[i] = c;
+  }
   return cost;
+}
+
+/** One step of the danger field: blur over the 8 neighbours, then fade. Only where something has died. */
+function settleDanger(w: World) {
+  const { width, height } = w.level.map;
+  const d = w.danger;
+  if (!d.some((v) => v > 0)) return;
+  const out = new Float32Array(d.length);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const v = d[y * width + x]!;
+      if (v <= 0) continue;
+      // Half stays, the other half is shared among the neighbours that lie inside the map.
+      const share = (v * 0.5) / 8;
+      const here = y * width + x;
+      out[here]! += v * 0.5;
+      for (const [dx, dy] of NEIGHBOURS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) out[here]! += share;
+        else out[ny * width + nx]! += share;
+      }
+    }
+  for (let i = 0; i < d.length; i++) {
+    const v = out[i]! * DANGER_FADE;
+    d[i] = v < 1e-4 ? 0 : v;
+  }
 }
 
 function reroute(w: World) {
@@ -473,7 +536,8 @@ function reroute(w: World) {
     w.congestion[i] = c;
     cost[i] = 1 + CONGESTION_COST * c;
   }
-  for (const route of w.routes) route.field = distanceField(w.level.map, w.level.map.goals, withShore(cost, route.shore));
+  settleDanger(w);
+  for (const route of w.routes) route.field = distanceField(w.level.map, w.level.map.goals, routeCost(w, route, cost));
 }
 
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [

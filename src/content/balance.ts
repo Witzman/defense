@@ -16,6 +16,13 @@ export const BALANCE = {
   costDepthGrowth: 1.2,
   costProgressGrowth: 1.01,
   /**
+   * Avoiding danger (#39): extra cost of a cell at full danger, times the type's dangerAvoidance and the level's
+   * learning. Learning grows from 0 at level `dangerLearnFrom` to 1 at `dangerLearnTo` (level numbers from 1).
+   */
+  dangerCost: 1.5,
+  dangerLearnFrom: 3,
+  dangerLearnTo: 25,
+  /**
    * Seconds the taps of a level run: base + perLevel × level. Nearly the same in every level (owner, #22): a bigger
    * mass comes at a higher rate and in parallel from every spawn, not over a longer time.
    */

@@ -2,7 +2,7 @@ import { cellAt, LAND, type GameMap, type Point } from "./map.ts";
 import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
-import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { turretType, type Combo, type Pattern, type ProcKind, type TurretKind, type TurretStats } from "../content/turrets.ts";
 import { BALANCE } from "../content/balance.ts";
 import { countArrived, createStats, sampleEnergy, SAMPLE_TICKS, type Credit, type RunStats } from "./stats.ts";
 
@@ -73,8 +73,10 @@ export interface LevelDef {
 /** What research gives the player for a run: per turret kind how many may stand and how strong each is. */
 export interface Arsenal {
   /** Per kind: how many may stand, how strong each is, and the weapon pattern as research changed it. */
-  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats; pattern?: Pattern }>>;
+  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats; pattern?: Pattern; procs?: Partial<Record<ProcKind, { chance: number; power: number }>> }>>;
   ability?: Ability;
+  /** Combinations of statuses switched on by research (#42). */
+  combos?: Combo[];
 }
 
 export interface Ability {
@@ -110,6 +112,10 @@ export interface Enemy {
   slowUntil: number;
   burnDps: number;
   burnUntil: number;
+  /** Ticks until which the blob is frozen, wet, or marked (#42). */
+  frozenUntil: number;
+  wetUntil: number;
+  markUntil: number;
 }
 
 /** A turret in the run; as a Credit it counts its own kills and damage (#32). */
@@ -126,6 +132,8 @@ export interface Turret extends Credit {
   aim: number;
   /** Shots ready to fire (fractional). Capped while idle, so waiting never banks a volley. */
   ready: number;
+  /** Chance collected towards the next trigger of each hit effect (#42); deterministic, no dice. */
+  procAcc: Partial<Record<ProcKind, number>>;
 }
 
 /** What the renderer shows of this tick's fire. */
@@ -293,7 +301,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       const e: Enemy = {
         id: w.nextId++, type, x, y, px: x, py: y, size,
         hp: size * t.hp * hpScale, shield: size * t.shield * hpScale, hpEach: t.hp * hpScale,
-        speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0,
+        speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0, frozenUntil: 0, wetUntil: 0, markUntil: 0,
       };
       w.enemies.push(e);
       w.active += size;
@@ -310,6 +318,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
         placement: p, kind: p.kind, stats: kind.stats, pattern: kind.pattern ?? type.pattern, damageType: type.damageType,
         x: p.x + 0.5, y: p.y + 0.5, facing, arc: rad(kind.stats.arc ?? 360), aim: facing,
         ready: Math.max(0, 1 - kind.stats.shotsPerSecond * DT),
+        procAcc: {},
         kills: 0,
         damage: 0,
       });
@@ -377,7 +386,7 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
   const t = enemyType(e.type);
   const v = vulnerability(t, type);
   if (v === 0) return 0;
-  let raw = amount;
+  let raw = amount * damageMultiplier(w, e, type);
   const before = e.shield + e.hp;
   if (e.shield > 0) {
     const mult = type === "electric" ? SHIELD_BREAKER : 1;
@@ -396,6 +405,22 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
   w.source.damage += before - e.shield - e.hp;
   return amount;
 }
+
+/** Marked blobs take more; research can switch on combinations of statuses (#42). */
+function damageMultiplier(w: World, e: Enemy, type: DamageType): number {
+  let m = 1;
+  if (w.tick <= e.markUntil) m *= MARK_BONUS;
+  const combos = w.arsenal.combos;
+  if (combos) {
+    if (combos.includes("shatter") && w.tick <= e.frozenUntil && (type === "kinetic" || type === "explosive")) m *= 1.5;
+    if (combos.includes("conduct") && w.tick <= e.wetUntil && type === "electric") m *= 1.5;
+    if (combos.includes("blaze") && e.burnDps > 0 && w.tick <= e.burnUntil && type === "explosive") m *= 1.3;
+  }
+  return m;
+}
+
+/** Damage bonus of a marked blob. */
+const MARK_BONUS = 1.25;
 
 /** Raw damage of a type it takes to finish this blob (Infinity if immune). */
 function needed(e: Enemy, type: DamageType): number {
@@ -743,8 +768,78 @@ function fire(w: World) {
         fireChain(w, t, target, shots, t.pattern);
         break;
     }
+    applyProcs(w, t, target, shots);
   }
   w.source = w.stats.other;
+}
+
+/**
+ * Hit effects (#42): each shot adds its chance to the turret's account for that effect; every full 1.0 triggers it once.
+ * Expected value instead of dice, so a run stays the same every time (#28) and a packet of thousands costs the same.
+ */
+function applyProcs(w: World, t: Turret, first: Enemy, shots: number) {
+  const procs = w.arsenal.turrets[t.kind]?.procs;
+  if (!procs) return;
+  for (const [proc, p] of Object.entries(procs) as [ProcKind, { chance: number; power: number }][]) {
+    if (p.chance <= 0) continue;
+    const acc = (t.procAcc[proc] ?? 0) + Math.min(1, p.chance) * shots;
+    const n = Math.min(MAX_PROCS, Math.floor(acc));
+    t.procAcc[proc] = acc - Math.floor(acc);
+    let target: Enemy | undefined = first;
+    for (let i = 0; i < n; i++) {
+      if (!target || target.size <= 0) target = nearest(w, t);
+      if (!target) break;
+      trigger(w, t, proc, target, p.power);
+    }
+  }
+}
+
+/** Triggers per turret, effect and tick at most; a big volley still triggers a handful of times. */
+const MAX_PROCS = 6;
+
+function trigger(w: World, t: Turret, proc: ProcKind, e: Enemy, power: number) {
+  const k = 1 + power;
+  const ticks = (seconds: number) => w.tick + Math.round((seconds * k) / DT);
+  switch (proc) {
+    case "freeze":
+      for (const o of w.enemies) {
+        if (o.size <= 0 || (o.x - e.x) ** 2 + (o.y - e.y) ** 2 > 0.64) continue;
+        o.speed = Math.min(o.speed, o.baseSpeed * 0.15);
+        o.slowUntil = Math.max(o.slowUntil, ticks(2.5));
+        o.frozenUntil = Math.max(o.frozenUntil, ticks(2.5));
+        o.wetUntil = Math.max(o.wetUntil, ticks(4));
+      }
+      break;
+    case "stun":
+      e.speed = 0;
+      e.slowUntil = Math.max(e.slowUntil, ticks(0.8));
+      break;
+    case "ignite":
+      if (vulnerability(enemyType(e.type), "fire") === 0) break;
+      e.burnDps = Math.max(e.burnDps, t.stats.damage * t.stats.shotsPerSecond * 0.5 * k);
+      e.burnUntil = Math.max(e.burnUntil, ticks(3));
+      break;
+    case "mark":
+      e.markUntil = Math.max(e.markUntil, ticks(4));
+      break;
+    case "grenade": {
+      // A second blast on the neighbour of the target.
+      let next: Enemy | undefined;
+      let bestD = 2.5 * 2.5;
+      for (const o of w.enemies) {
+        if (o === e || o.size <= 0) continue;
+        const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2;
+        if (d <= bestD) {
+          bestD = d;
+          next = o;
+        }
+      }
+      if (!next) break;
+      w.splash(next.x, next.y, 1, t.stats.damage * 2 * k, "explosive");
+      w.shots.push({ kind: "blast", at: { x: next.x, y: next.y }, radius: 1, turret: t.kind });
+      break;
+    }
+  }
 }
 
 /** All shots of the tick as one damage budget: the nearest target takes what kills it, the rest spills on. */
@@ -812,6 +907,7 @@ function fireSlow(w: World, t: Turret, first: Enemy, shots: number, p: { radius:
     if (e.size <= 0 || (e.x - x) ** 2 + (e.y - y) ** 2 > p.radius * p.radius) continue;
     e.speed = Math.min(e.speed, e.baseSpeed * (1 - p.factor));
     e.slowUntil = w.tick + Math.round(p.seconds / DT);
+    e.wetUntil = Math.max(e.wetUntil, w.tick + Math.round((p.seconds + 2) / DT));
   }
   w.shots.push({ kind: "blast", at: { x, y }, radius: p.radius, turret: t.kind });
 }

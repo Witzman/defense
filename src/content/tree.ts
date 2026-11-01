@@ -6,7 +6,7 @@
  * A node can be bought when it touches a bought node (links, either direction) and every node in `requiresAll`
  * is bought. Cost grows with the path length from the start, so a far direction costs more by distance alone.
  */
-import { TURRET_TYPES, turretType, type TurretKind } from "./turrets.ts";
+import { TURRET_TYPES, turretType, type Combo, type ProcKind, type TurretKind } from "./turrets.ts";
 import type { DamageType } from "./enemies.ts";
 import { BALANCE } from "./balance.ts";
 
@@ -22,6 +22,12 @@ export type Effect =
   | { kind: "turnRate"; turret: TurretKind; mul: number }
   /** Widens the swivel arc by degrees (#41); the arc is capped at MAX_ARC. */
   | { kind: "arc"; turret: TurretKind; add: number }
+  /** A hit of this kind has `chance` more (0..1 per shot) to trigger `proc` (#42). */
+  | { kind: "proc"; turret: TurretKind; proc: ProcKind; chance: number }
+  /** Makes the proc stronger: longer, harder, more damage (×(1 + power)). */
+  | { kind: "procPower"; turret: TurretKind; proc: ProcKind; add: number }
+  /** Switches on a combination of statuses for all kinds. */
+  | { kind: "combo"; combo: Combo }
   | { kind: "pattern"; turret: TurretKind; field: PatternField; add: number }
   | { kind: "abilityUnlock" }
   | { kind: "abilityDamage"; mul: number }
@@ -249,7 +255,7 @@ export function buildTree(): ResearchNode[] {
       name: `Synergie ${turretType(a).name} + ${turretType(b).name}`,
       links: [],
       requiresAll: [a, b],
-      effects: [{ kind: "capacity", turret: a, add: 2 }, { kind: "capacity", turret: b, add: 2 }, { kind: "fireRate", turret: a, mul: 1.25 }, { kind: "fireRate", turret: b, mul: 1.25 }],
+      effects: [{ kind: "capacity", turret: a, add: 2 }, { kind: "capacity", turret: b, add: 2 }, { kind: "fireRate", turret: a, mul: 1.25 }, { kind: "fireRate", turret: b, mul: 1.25 }, ...comboOf(a, b)],
       size: "synergy",
       cluster: "bridge",
       x: Math.cos(r) * CLUSTER_RADIUS * 1.35,
@@ -302,6 +308,48 @@ function areaStep(k: TurretKind): Effect[] {
   }
 }
 
+/** Pairs whose synergy node also switches on a combination of statuses (#42). */
+const COMBOS: Record<string, Combo> = { "railgun-frost": "shatter", "frost-breaker": "conduct", "rocket-napalm": "blaze" };
+function comboOf(a: TurretKind, b: TurretKind): Effect[] {
+  const combo = COMBOS[`${a}-${b}`];
+  return combo ? [{ kind: "combo", combo }] : [];
+}
+
+/** The two hit effects each kind can learn (#42), by what the weapon is. */
+const PROCS: Record<TurretKind, [ProcKind, ProcKind]> = {
+  cannon: ["mark", "grenade"],
+  mortar: ["grenade", "mark"],
+  flamer: ["ignite", "grenade"],
+  laser: ["mark", "ignite"],
+  tesla: ["stun", "mark"],
+  gatling: ["mark", "ignite"],
+  rocket: ["freeze", "grenade"],
+  napalm: ["ignite", "freeze"],
+  railgun: ["mark", "stun"],
+  frost: ["freeze", "stun"],
+  breaker: ["stun", "mark"],
+  shrapnel: ["grenade", "ignite"],
+};
+
+const PROC_NAMES: Record<ProcKind, [string, string, string]> = {
+  freeze: ["Frostkern", "Eisspitze", "Absoluter Nullpunkt"],
+  stun: ["Schockspitze", "Lähmung", "Stillstand"],
+  ignite: ["Zündladung", "Brandsatz", "Inferno"],
+  grenade: ["Streugranate", "Nachbarschaftshilfe", "Splitterkaskade"],
+  mark: ["Zielmarkierung", "Schwachstelle", "Todesmarke"],
+};
+
+/** A chain of one hit effect: small steps raise the chance, the notables more, the keystone makes it hit harder (#42). */
+function procChain(id: string, k: TurretKind, proc: ProcKind, length = 7): Chain {
+  const [name, notableName, keystoneName] = PROC_NAMES[proc];
+  return {
+    id, name, notableName, keystoneName, length,
+    small: [{ kind: "proc", turret: k, proc, chance: 0.025 }],
+    notable: [{ kind: "proc", turret: k, proc, chance: 0.08 }],
+    keystone: [{ kind: "proc", turret: k, proc, chance: 0.2 }, { kind: "procPower", turret: k, proc, add: 1 }],
+  };
+}
+
 /** The chains of a turret cluster: the five stats every kind has, plus one for its weapon pattern. */
 function CHAINS(k: TurretKind): Chain[] {
   const p = turretType(k).pattern;
@@ -328,11 +376,13 @@ function CHAINS(k: TurretKind): Chain[] {
     { id: "cap", name: "Anzahl", notableName: "Nachschub", keystoneName: "Batterie", length: 12, small: [{ kind: "capacity", turret: k, add: 1 }], notable: [{ kind: "capacity", turret: k, add: 3 }], keystone: [{ kind: "capacityMul", turret: k, mul: 2 }] },
     { id: "rate", name: "Feuerrate", notableName: "Schnellladung", keystoneName: "Overdrive", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.1 }], notable: [{ kind: "fireRate", turret: k, mul: 1.6 }], keystone: [{ kind: "fireRate", turret: k, mul: 3 }] },
     patternChain,
-    // #21: the mass scales, not the toughness — this chain feeds throughput; damage only at its milestones, moderate.
-    { id: "dmg", name: "Munition", notableName: "Hartkern", keystoneName: "Vernichter", length: 12, small: [{ kind: "fireRate", turret: k, mul: 1.04 }], notable: [{ kind: "damage", turret: k, mul: 1.15 }], keystone: [{ kind: "damage", turret: k, mul: 1.5 }, { kind: "capacity", turret: k, add: 2 }] },
+    // #42: two chains of hit effects instead of the old damage chain: what a hit can trigger, with what chance.
+    procChain("procA", k, PROCS[k][0]),
     { id: "range", name: "Reichweite", notableName: "Weitsicht", keystoneName: "Horizont", length: 10, small: [{ kind: "range", turret: k, add: 0.2 }], smallAlt: areaStep(k), notable: [{ kind: "range", turret: k, add: 1 }], keystone: [{ kind: "range", turret: k, add: 4 }] },
     // #41: the arc starts at 20° and this chain widens it: 6 small (+12°), 1 notable (+40°), the keystone (+48°) = 180°.
     { id: "turn", name: "Schwenkbereich", notableName: "Servoantrieb", keystoneName: "Weitwinkel", length: 8, small: [{ kind: "arc", turret: k, add: 12 }], notable: [{ kind: "arc", turret: k, add: 40 }, { kind: "turnRate", turret: k, mul: 1.5 }], keystone: [{ kind: "arc", turret: k, add: 48 }, { kind: "turnRate", turret: k, mul: 2 }] },
+    // Lanes next to each other need different lengths, or their keystones overlap (#23).
+    procChain("procB", k, PROCS[k][1], 10),
   ];
 }
 

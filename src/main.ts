@@ -5,6 +5,7 @@ import { runPoints } from "./game/points.ts";
 import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
 import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
+import { nextArc, spreadArc, turnedFacing } from "./ui/turretEdit.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -21,7 +22,6 @@ const dpr = () => window.devicePixelRatio || 1;
 const fmt = new Intl.NumberFormat("de-DE");
 
 /** Swivel arcs the player cycles through, in degrees. */
-const ARCS = [360, 180, 120, 90, 60];
 
 let save: Save = emptySave();
 let arsenal: Arsenal = { turrets: {} };
@@ -129,6 +129,25 @@ const toMap = (p: Pt) => ({ x: (p.x * dpr() - view.ox) / view.scale, y: (p.y * d
 const placedAt = (c: Point) => placements.findIndex((p) => p.x === c.x && p.y === c.y);
 /** Touch has no hover (#15): a tapped turret is picked, and the turret tools turn, narrow or remove it. */
 let picked: Placement | undefined;
+/**
+ * A picked turret held by the fingers (#25): one finger moves it, two fingers set its arc (spread) and facing (turn).
+ * `base` is where facing and arc stood when the fingers went down; `blocked` the cell under the finger it cannot take.
+ */
+let held: { base: { facing: number; arc: number }; blocked?: Point } | undefined;
+/** The cell a tap just built on: a double tap there keeps the new turret instead of removing it. */
+let builtByTap: Point | undefined;
+const pickedNow = () => (phase === "prepare" && picked && placements.includes(picked) ? picked : undefined);
+const nearPicked = (p: Pt, cells: number) => {
+  const t = pickedNow();
+  if (!t) return false;
+  const m = toMap(p);
+  return Math.hypot(m.x - (t.x + 0.5), m.y - (t.y + 0.5)) <= cells;
+};
+function hold(): true {
+  const t = pickedNow()!;
+  held = { base: { facing: t.facing ?? 0, arc: t.arc ?? 360 } };
+  return true;
+}
 const coarse = matchMedia("(pointer: coarse)").matches;
 
 // Camera: wheel or pinch zooms, dragging pans; a press without movement is a tap.
@@ -145,7 +164,45 @@ attachGestures(canvas, {
   hover(p) {
     cursor = p && toCell(p);
   },
-  tap(p, ev) {
+  // On the picked turret a finger grabs it at once; elsewhere on a turret, holding still picks and grabs it.
+  grab: (p) => nearPicked(p, 0.75) && hold(),
+  hold(p) {
+    if (phase !== "prepare") return false;
+    const i = placedAt(toCell(p));
+    if (i < 0) return false;
+    picked = placements[i];
+    renderTools();
+    updateHud();
+    return hold();
+  },
+  grab2: (mid) => nearPicked(mid, 2) && hold(),
+  drag(p) {
+    const t = pickedNow();
+    if (!t || !held) return;
+    const cell = toCell(p);
+    if (cell.x === t.x && cell.y === t.y) return (held.blocked = undefined);
+    const others = placements.filter((q) => q !== t);
+    if (canPlace(level, arsenal, others, { ...t, ...cell })) {
+      t.x = cell.x;
+      t.y = cell.y;
+      held.blocked = undefined;
+      rebuildWorld();
+    } else held.blocked = cell;
+  },
+  twist(tw) {
+    const t = pickedNow();
+    if (!t || !held) return;
+    t.facing = turnedFacing(held.base.facing, tw.rot);
+    t.arc = spreadArc(held.base.arc, tw.k);
+    rebuildWorld();
+    renderTools();
+  },
+  release() {
+    const t = pickedNow();
+    held = undefined;
+    if (t) toolDone(t);
+  },
+  tap(p, ev, count) {
     if (phase === "run") {
       const m = toMap(p);
       useAbility(world, m.x, m.y);
@@ -155,7 +212,14 @@ attachGestures(canvas, {
     const touch = ev.pointerType !== "mouse";
     const cell = toCell(p);
     const i = placedAt(cell);
-    if (i >= 0 && touch) {
+    const rebuilt = builtByTap && builtByTap.x === cell.x && builtByTap.y === cell.y;
+    builtByTap = undefined;
+    if (touch && count === 2 && i >= 0) {
+      // Double tap removes a turret; the second tap on one the first tap just built keeps it.
+      if (rebuilt) return;
+      if (placements[i] === picked) picked = undefined;
+      placements.splice(i, 1);
+    } else if (i >= 0 && touch) {
       picked = picked === placements[i] ? undefined : placements[i];
     } else if (i >= 0) {
       if (placements[i] === picked) picked = undefined;
@@ -163,7 +227,10 @@ attachGestures(canvas, {
     } else if (selected && canPlace(level, arsenal, placements, { ...cell, kind: selected })) {
       const placed: Placement = { ...cell, kind: selected, ...draft };
       placements.push(placed);
-      if (touch) picked = placed;
+      if (touch) {
+        picked = placed;
+        builtByTap = cell;
+      }
     } else {
       picked = undefined;
       renderTools();
@@ -183,7 +250,7 @@ function turn(t: { facing?: number; arc?: number }, by: number) {
   toolDone(t);
 }
 function narrow(t: { facing?: number; arc?: number }) {
-  t.arc = ARCS[(ARCS.indexOf(t.arc ?? 360) + 1) % ARCS.length];
+  t.arc = nextArc(t.arc ?? 360);
   toolDone(t);
 }
 function toolDone(t: { facing?: number; arc?: number }) {
@@ -280,10 +347,13 @@ function updateHud() {
     ability.classList.toggle("ready", wait === 0);
   }
   const noTurret = unlockedKinds().length === 0;
-  hint.hidden = !(phase === "prepare" && (noTurret || placements.length === 0));
+  const editing = coarse && !!pickedNow();
+  hint.hidden = !(phase === "prepare" && (noTurret || placements.length === 0 || editing));
   hint.textContent = noTurret
     ? "Noch kein Geschütz – erforsche zuerst eins."
-    : coarse
+    : editing && placements.length > 0
+      ? "Ziehen verschiebt · zwei Finger: spreizen = Bereich, drehen = Ausrichtung · Doppeltipp entfernt"
+      : coarse
       ? "Tippen auf Land setzt ein Geschütz · antippen wählt es · rechts drehen, Bereich, entfernen · zwei Finger zoomen"
       : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–9 wählt die Art";
 }
@@ -429,7 +499,9 @@ function frame(now: number) {
       hover = { placement: p, valid: canPlace(level, arsenal, placements, p), range: arsenal.turrets[selected]!.stats.range, existing: false };
     }
   }
-  if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
+  if (held?.blocked && picked) {
+    hover = { placement: { ...picked, ...held.blocked }, valid: false, range: 0, existing: true };
+  } else if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
     hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
   drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare", trail });

@@ -98,3 +98,5 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
   .slot { min-width: 56px; justify-content: center; }
 }
 .panel[hidden], [hidden] { display: none !important; }
+/* Hints only inform: touches and clicks go through to the map beneath (#25). */
+#hint, #ability { pointer-events: none; }

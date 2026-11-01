@@ -522,15 +522,18 @@ $("new-game").addEventListener("click", () => {
   }
 });
 
+/** Testphase (#46): every level can be opened, whatever the save has unlocked. Set to false to restore the campaign order. */
+const ALL_LEVELS_OPEN = true;
+
 function renderCampaign() {
   $("levels").replaceChildren(
     ...LEVELS.map((_, i) => {
       const li = document.createElement("li");
       const b = document.createElement("button");
       const p = save.levels[i];
-      const state = p?.perfect ? "★ Perfect Clear" : p?.won ? "✓ geschafft" : i <= save.unlockedLevel ? "offen" : "gesperrt";
+      const state = p?.perfect ? "★ Perfect Clear" : p?.won ? "✓ geschafft" : ALL_LEVELS_OPEN || i <= save.unlockedLevel ? "offen" : "gesperrt";
       b.innerHTML = `Level ${i + 1}<span class="state">${state}</span>`;
-      b.disabled = i > save.unlockedLevel;
+      b.disabled = !ALL_LEVELS_OPEN && i > save.unlockedLevel;
       b.classList.toggle("current", i === levelIndex);
       b.addEventListener("click", () => {
         closePanels();

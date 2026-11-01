@@ -30,3 +30,13 @@ export const SPEEDS = [1, 2] as const;
 export type Speed = (typeof SPEEDS)[number];
 export const nextSpeed = (s: Speed): Speed => (s === 1 ? 2 : 1);
 export const parseSpeed = (stored: string | null): Speed => (stored === "2" ? 2 : 1);
+
+/**
+ * How far the precision shot has recharged (#37), 0 just fired … 1 ready: the share of its ring that is drawn.
+ * `readyTick` is the tick from which it may fire again, `cooldown` its seconds between two uses.
+ */
+export function cooldownFraction(tick: number, readyTick: number, cooldown: number, dt: number): number {
+  const total = Math.round(cooldown / dt);
+  if (total <= 0 || tick >= readyTick) return 1;
+  return Math.min(1, Math.max(0, 1 - (readyTick - tick) / total));
+}

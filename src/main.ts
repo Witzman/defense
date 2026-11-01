@@ -6,7 +6,7 @@ import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
 import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
 import { nextArc, spreadArc, turnedFacing } from "./ui/turretEdit.ts";
-import { frameSteps, nextSpeed, parseSpeed, slotCount, type Speed } from "./ui/controls.ts";
+import { cooldownFraction, frameSteps, nextSpeed, parseSpeed, slotCount, type Speed } from "./ui/controls.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -165,6 +165,7 @@ attachGestures(canvas, {
   },
   hover(p) {
     cursor = p && toCell(p);
+    mouseAt = p;
   },
   // On the picked turret a finger grabs it at once; elsewhere on a turret, holding still picks and grabs it.
   grab: (p) => nearPicked(p, 0.75) && hold(),
@@ -379,18 +380,15 @@ function updateHud() {
   $("energy-fill").style.width = `${Math.min(...pcts)}%`;
   $("points").textContent = fmt.format(Math.floor(save.points));
   $("research-points").textContent = fmt.format(Math.floor(save.points));
-  const ability = $("ability");
-  ability.hidden = !arsenal.ability || phase !== "run" || paused; // the pause hint takes its place
-  if (arsenal.ability && phase === "run") {
-    const wait = Math.max(0, (world.abilityReadyTick - world.tick) * DT);
-    ability.textContent = wait > 0 ? `Präzisionsschuss ${wait.toFixed(1)} s` : `Präzisionsschuss bereit – ${coarse ? "Tippen" : "Klick"} ins Wasser`;
-    ability.classList.toggle("ready", wait === 0);
-  }
+  renderAbility();
   const noTurret = unlockedKinds().length === 0;
   const editing = coarse && !!pickedNow();
-  hint.hidden = !((phase === "prepare" && (noTurret || placements.length === 0 || editing)) || (phase === "run" && paused));
+  const aiming = phase === "run" && !paused && performance.now() < aimHintUntil;
+  hint.hidden = !((phase === "prepare" && (noTurret || placements.length === 0 || editing)) || (phase === "run" && paused) || aiming);
   hint.textContent = phase === "run"
-    ? `Pause – ${coarse ? "▶ tippen" : "Leertaste oder ▶"} spielt weiter`
+    ? paused
+      ? `Pause – ${coarse ? "▶ tippen" : "Leertaste oder ▶"} spielt weiter`
+      : `Präzisionsschuss: ${coarse ? "Tippen" : "Klick"} ins Wasser feuert, sobald der Ring voll ist`
     : noTurret
     ? "Noch kein Geschütz – erforsche zuerst eins."
     : editing && placements.length > 0
@@ -399,6 +397,41 @@ function updateHud() {
       ? "Tippen auf Land setzt ein Geschütz · antippen wählt es · rechts drehen, Bereich, entfernen · zwei Finger zoomen"
       : "Klick auf Land setzt ein Geschütz · R dreht · A ändert den Schwenkbereich · 1–9 wählt die Art";
 }
+
+/**
+ * Precision shot (#37): a button in the tool column whose ring fills over the cooldown and glows when the shot is
+ * ready; with a mouse a small ring also follows the cursor while it recharges. Firing stays a tap into the water.
+ */
+const abilityButton = $<HTMLButtonElement>("ability-btn");
+const abilityCursor = $("ability-cursor");
+/** Mouse position over the map (CSS pixels), for the cursor ring. */
+let mouseAt: Pt | undefined;
+/** Until when the aim hint shows after the button was pressed. */
+let aimHintUntil = 0;
+let shownRing = -1;
+function renderAbility() {
+  const a = arsenal.ability;
+  const on = !!a && phase === "run";
+  abilityButton.hidden = !on;
+  const f = on ? cooldownFraction(world.tick, world.abilityReadyTick, a.cooldown, DT) : 1;
+  const ready = f >= 1;
+  abilityCursor.hidden = !on || ready || !mouseAt;
+  if (!on) return;
+  const r = Math.round(f * 200) / 200;
+  if (r !== shownRing) {
+    shownRing = r;
+    $("ability-ring").style.strokeDasharray = `${r} 1`;
+    abilityCursor.style.setProperty("--p", String(r));
+  }
+  abilityButton.classList.toggle("ready", ready);
+  const wait = Math.max(0, (world.abilityReadyTick - world.tick) * DT);
+  abilityButton.title = ready ? `Präzisionsschuss bereit – ${coarse ? "Tippen" : "Klick"} ins Wasser` : `Präzisionsschuss in ${wait.toFixed(1)} s`;
+  if (mouseAt) abilityCursor.style.transform = `translate(${mouseAt.x}px, ${mouseAt.y}px)`;
+}
+abilityButton.addEventListener("click", () => {
+  aimHintUntil = performance.now() + 3000;
+  updateHud();
+});
 
 function finish() {
   phase = "over";

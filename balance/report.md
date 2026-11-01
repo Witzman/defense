@@ -1,30 +1,31 @@
-# Balancing report (#11, interim, stopped after level 7)
+# Balancing report (#11, levels 1–3, after #39–#42)
 
-Written by hand from `balance/search.json` (`npm run balance:search`). Numbers: failed runs before the first win.
-Corridor (owner, 2026-11-01): generalist 6–14, random ≤ 40; the optimizer and the specialist are only watched.
-Points per kill never below 1 (rounding, "every kill counts").
+From `balance/search.json` (`npm run balance:search`), first run on the game with danger avoidance (#39), research-only
+swivel arc (#41), cohesion (#40) and hit effects (#42). Failed runs before the first win.
+Corridor: generalist 6–14, random ≤ 40; optimizer and specialist only observed.
 
 | Level | hp × | points × | generalist | optimizer | random | in corridor |
 |---|---|---|---|---|---|---|
-| 1 | 0.954 | 1.735 | 4 | 1 | 8 | no |
-| 2 | 0.224 | 4.101 | 0 | 0 | 1 | no |
-| 3 | 0.224 | 3.623 | 0 | 0 | 0 | no |
-| 4 | 1.000 | 1.025 | 0 | 0 | 0 | no |
-| 5 | 2.115 | 4.309 | 1 | 0 | 4 | no |
-| 6 | 16.01 | 0.892 | 8 | 0 | 0 | yes |
-| 7 | 1.000 | 0.487 | 0 | 0 | 0 | no |
+| 1 | 1.000 | 2.154 | 0 | 0 | 32 | no |
+| 2 | 1.000 | 1.682 | 0 | 0 | 3 | no |
+| 3 | 2.391 | 5.185 | 4 | 0 | 5 | no (closest) |
 
-None of these factors is applied in `BALANCE`; nothing in the game has changed.
+Applied in `BALANCE`: level 3 only (hp ×2.391, points ×5.185). Level 1 keeps hp ×0.8 and points ×1 (the guards of #9 need
+it; the search's pair leaves the random player at 32 of 40). Level 2 keeps the defaults: the search found nothing better.
+
+## Measures (generalist, one run with the preset it enters the level with)
+
+| Level | run (s) | target (s) | jams (≥5 % cells full) | deep water in reach | water share | points/min | best earlier |
+|---|---|---|---|---|---|---|---|
+| 1 | 20 | 60–120 | 0 % | 100 % | 38 % | – | – |
+| 2 | 54 | 60–120 | 0 % | 100 % | 74 % | 442 | 271 |
+| 3 | 28 | 60–120 | 0 % | 100 % | 49 % | 122 | 732 |
 
 ## Findings
 
-- The generalist's failures are not smooth in the level's hit points: at level 4 (earlier run) ×5.2 gave 0 failures, ×7.8
-  gave 5, ×11.7 stuck. Two knobs (hit points, points per kill) find the window only on some levels (6 of 7 miss).
-- The optimizer wins at once nearly everywhere; it cannot be held to a minimum of failures (criterion dropped).
-- Tool bug fixed: a profile cut short by its early-abort cap had no save to hand on.
-- Search cost is CPU time per run (map size, route rebuilds): about 80 s for level 1, 1,300 s for level 6, 440 s for level 7.
-
-## Stopped on purpose
-
-Owner 2026-11-01 stopped the run: #41 (turning angle by research), #40 (collisions) and #42 (tree interactions) change
-the game under the measurement. Tune again after them; presets in `balance/presets/` are from this run and stale then.
+- **Runs are far too short** (20–54 s against 60–120 s): the enemies are gone before the stream has run.
+- **No jams** in levels 1–3 (the target only asks from level 6), deep water is fully in reach.
+- **Level 3 pays less than level 2** (122 against 732 points/min with the same research): the newest level is not the
+  best farm (criterion 5 fails).
+- The generalist gets 0 failures where the random player needs 32 on level 1: the window "generalist 6–14, random ≤ 40"
+  has no hit-point value on that level; the bots differ by more than the corridor.

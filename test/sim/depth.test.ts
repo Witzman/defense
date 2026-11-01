@@ -114,10 +114,11 @@ describe("enemies prefer deep water (#27)", () => {
       level(twoArms(10), ["green", "ember", "shield", "rock", "swarm"].map((type) => ({ type, count: 1, perSecond: 1 }))),
       { turrets: {} }, [], 1,
     );
-    expect(w.routes.map((r) => r.preference)).toEqual([1, 4, 0]);
-    expect(w.routeOf.get("green")).toBe(w.routeOf.get("ember"));
-    expect(w.routeOf.get("green")).toBe(w.routeOf.get("shield"));
-    expect(w.routeOf.get("rock")).not.toBe(w.routeOf.get("green"));
+    // green and swarm are indifferent (0), ember and shield share 1, rock 4.
+    expect(w.routes.map((r) => r.preference)).toEqual([0, 1, 4]);
+    expect(w.routeOf.get("green")).toBe(w.routeOf.get("swarm"));
+    expect(w.routeOf.get("ember")).toBe(w.routeOf.get("shield"));
+    expect(w.routeOf.get("rock")).not.toBe(w.routeOf.get("ember"));
   });
 
   it("a type that is not in the level gets its route when its first blob appears", () => {

@@ -31,10 +31,12 @@ export const SHIELD_BREAKER = 3;
 
 // Depth preference (#27, owner: Fels keeps strictly to deep water, Schwarm takes every shortcut). Fels is the heavy,
 // slow one: a shore cell costs it 5 times, so it goes a long way round to stay deep. Panzer is heavy too, but less.
-// Grünling, Glut and Schildträger keep a mild distance from the shore; they share one value, so one route field.
-// Schwarm is small and fast and hugs the inside of every bend. Few distinct values keep the route fields few.
+// Glut and Schildträger keep a mild distance from the shore; they share one value, so one route field. Schwarm is
+// small and fast and hugs the inside of every bend. Grünling, the first enemy and the only one of level 1, stays
+// indifferent too: the start must stay as playable as it was (#2); a preference of 1 there left the random player of
+// the balancing guard without a win in 40 tries. Few distinct values keep the route fields few.
 export const ENEMY_TYPES: readonly EnemyType[] = [
-  { id: "green", name: "Grünling", color: "#a7d64a", edge: "#6f9a24", hp: 1, shield: 0, speed: 1, resist: {}, depthPreference: 1 },
+  { id: "green", name: "Grünling", color: "#a7d64a", edge: "#6f9a24", hp: 1, shield: 0, speed: 1, resist: {}, depthPreference: 0 },
   { id: "armor", name: "Panzer", color: "#5aa9e6", edge: "#2f6f9f", hp: 2, shield: 0, speed: 0.85, resist: { kinetic: 0.6 }, depthPreference: 2 },
   { id: "ember", name: "Glut", color: "#f28c38", edge: "#b0561a", hp: 1.2, shield: 0, speed: 1, resist: { fire: 1 }, depthPreference: 1 },
   { id: "shield", name: "Schildträger", color: "#b388eb", edge: "#7a52b3", hp: 1, shield: 2, speed: 0.9, resist: {}, depthPreference: 1 },

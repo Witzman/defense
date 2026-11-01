@@ -10,6 +10,9 @@ import { cooldownFraction, frameSteps, nextSpeed, parseSpeed, slotCount, type Sp
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
+import { analyse } from "./game/stats.ts";
+import { renderAnalysis, summaryHtml } from "./ui/analysis.ts";
+import { createEnemyCard } from "./ui/enemyCard.ts";
 import { createScene, drawWorld, fitView, screenToCell, zoomAt, Trail, type Scene, type View } from "./render/canvas.ts";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
@@ -40,6 +43,7 @@ let view: View;
 let fitted: View;
 let scene: Scene;
 const trail = new Trail();
+const enemyCard = createEnemyCard();
 
 const saver = createSaver((state) => {
   const el = $("save-state");
@@ -103,6 +107,8 @@ function prepare() {
   rebuildWorld();
   trail.clear();
   banner.hidden = true;
+  $("analysis").hidden = true;
+  enemyCard.hide();
   nextButton.hidden = true;
   startButton.textContent = "Run starten";
   startButton.disabled = false;
@@ -438,10 +444,17 @@ function finish() {
   const won = world.status === "won";
   const earned = runPoints(levelIndex, world.killed, total);
   commit(recordRun(save, levelIndex, { status: won ? "won" : "lost", killed: world.killed, total, perfect: world.perfect }, LEVELS.length));
-  const pct = Math.round((Math.min(...world.energies) / level.goalEnergy) * 100);
   banner.innerHTML = won
-    ? `${world.perfect ? "Perfect Clear" : "Sieg"}<small>${world.energies.length > 1 ? "schwächstes Ziel" : "Ziel"} bei ${pct} % · +${fmt.format(earned)} ◆</small>`
+    ? `${world.perfect ? "Perfect Clear" : "Sieg"}<small>${fmt.format(world.killed)} von ${fmt.format(total)} besiegt · +${fmt.format(earned)} ◆</small>`
     : `Niederlage<small>${fmt.format(world.killed)} von ${fmt.format(total)} besiegt · +${fmt.format(earned)} ◆</small>`;
+  // The run in brief, and the button to all its numbers (#32).
+  const analysis = analyse(world);
+  banner.insertAdjacentHTML("beforeend", `<div class="summary">${summaryHtml(analysis, level.goalEnergy)}</div><button id="analysis-open" type="button" class="ghost">Auswertung</button>`);
+  $("analysis-open").addEventListener("click", () => {
+    closePanels();
+    renderAnalysis($("analysis-body"), analysis, { goalEnergy: level.goalEnergy, kinds: unlockedKinds, card: enemyCard });
+    $("analysis").hidden = false;
+  });
   banner.hidden = false;
   startButton.textContent = "Nächster Run";
   startButton.disabled = false;
@@ -452,6 +465,7 @@ function finish() {
 // Panels.
 function closePanels() {
   for (const p of document.querySelectorAll<HTMLElement>(".panel")) p.hidden = true;
+  enemyCard.hide();
 }
 for (const b of document.querySelectorAll("[data-close]")) b.addEventListener("click", closePanels);
 $("campaign-open").addEventListener("click", () => {

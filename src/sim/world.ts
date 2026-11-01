@@ -3,6 +3,7 @@ import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
 import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { countArrived, createStats, sampleEnergy, SAMPLE_TICKS, type Credit, type RunStats } from "./stats.ts";
 
 /** Simulation step in seconds. Fixed, so a run with the same seed replays exactly. */
 export const DT = 1 / 30;
@@ -102,7 +103,8 @@ export interface Enemy {
   burnUntil: number;
 }
 
-export interface Turret {
+/** A turret in the run; as a Credit it counts its own kills and damage (#32). */
+export interface Turret extends Credit {
   placement: Placement;
   kind: TurretKind;
   stats: TurretStats;
@@ -190,6 +192,10 @@ export interface World {
   arrived: number;
   abilityReadyTick: number;
   readonly perfect: boolean;
+  /** What the run counts for its analysis (#32); never read by the simulation. */
+  stats: RunStats;
+  /** Who is dealing damage right now: the firing turret, burning, the precision shot, or `stats.other`. */
+  source: Credit;
   /** Deals `amount` damage of a type to a blob: shield first, then hit points; returns the amount used. */
   hit(e: Enemy, amount: number, type: DamageType): number;
   /** Damage to every blob within `radius` of a point. */
@@ -253,6 +259,8 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     killed: 0,
     arrived: 0,
     abilityReadyTick: 0,
+    stats: createStats(level.map.goals.length, level.goalEnergy),
+    source: undefined!,
     get perfect() {
       return this.status === "won" && this.energies.every((e) => e === this.level.goalEnergy);
     },
@@ -270,6 +278,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       };
       w.enemies.push(e);
       w.active += size;
+      w.stats.spawned[type] = (w.stats.spawned[type] ?? 0) + size;
       w.density[Math.floor(y) * level.map.width + Math.floor(x)]! += size;
       return e;
     },
@@ -282,9 +291,12 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
         placement: p, kind: p.kind, stats: kind.stats, pattern: kind.pattern ?? type.pattern, damageType: type.damageType,
         x: p.x + 0.5, y: p.y + 0.5, facing, arc: rad(p.arc ?? 360), aim: facing,
         ready: Math.max(0, 1 - kind.stats.shotsPerSecond * DT),
+        kills: 0,
+        damage: 0,
       });
     },
   };
+  w.source = w.stats.other;
   for (const g of groups) routeFor(w, g.type);
   const placed: Placement[] = [];
   for (const p of placements) {
@@ -313,11 +325,12 @@ export function step(w: World): void {
   spawn(w);
   if (w.tick % REROUTE_TICKS === 0) reroute(w);
   move(w);
-  if (w.status !== "running") return;
+  if (w.status !== "running") return sampleEnergy(w.stats, w.energies);
   burn(w);
   fire(w);
   sweep(w);
   if (w.toSpawn === 0 && w.active === 0) w.status = "won";
+  if (w.tick % SAMPLE_TICKS === 0 || w.status !== "running") sampleEnergy(w.stats, w.energies);
 }
 
 /** Steps until the run is decided. The cap only guards tests against a run that never ends. */
@@ -330,7 +343,9 @@ export function useAbility(w: World, x: number, y: number): boolean {
   const a = w.arsenal.ability;
   if (!a || w.status !== "running" || w.tick < w.abilityReadyTick) return false;
   w.abilityReadyTick = w.tick + Math.round(a.cooldown / DT);
+  w.source = w.stats.ability;
   w.splash(x, y, a.radius, a.damage, "kinetic");
+  w.source = w.stats.other;
   w.shots.push({ kind: "blast", at: { x, y }, radius: a.radius, turret: "cannon" });
   sweep(w);
   return true;
@@ -344,11 +359,13 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
   const v = vulnerability(t, type);
   if (v === 0) return 0;
   let raw = amount;
+  const before = e.shield + e.hp;
   if (e.shield > 0) {
     const mult = type === "electric" ? SHIELD_BREAKER : 1;
     const onShield = raw * v * mult;
     if (onShield <= e.shield) {
       e.shield -= onShield;
+      w.source.damage += onShield;
       return amount;
     }
     raw -= e.shield / (v * mult);
@@ -357,6 +374,7 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
   e.hp = Math.max(0, e.hp - raw * v);
   // Members die as the pool drops below their share; a blob of 10 at 2 hp each loses one per 2 damage.
   killTo(w, e, Math.ceil(e.hp / e.hpEach - 1e-9));
+  w.source.damage += before - e.shield - e.hp;
   return amount;
 }
 
@@ -376,6 +394,8 @@ function killTo(w: World, e: Enemy, alive: number) {
   else e.hp = Math.min(e.hp, alive * e.hpEach);
   w.killed += dead;
   w.active -= dead;
+  w.source.kills += dead;
+  w.stats.killed[e.type] = (w.stats.killed[e.type] ?? 0) + dead;
   w.density[Math.floor(e.y) * w.level.map.width + Math.floor(e.x)]! -= dead;
 }
 
@@ -384,10 +404,12 @@ function sweep(w: World) {
 }
 
 function burn(w: World) {
+  w.source = w.stats.burn;
   for (const e of w.enemies) {
     if (e.burnDps > 0 && w.tick <= e.burnUntil) hit(w, e, e.burnDps * DT, "fire");
     else e.burnDps = 0;
   }
+  w.source = w.stats.other;
 }
 
 // --- spawning and flow ----------------------------------------------------------------------------------
@@ -477,6 +499,7 @@ function move(w: World) {
       w.density[ci]! -= e.size;
       w.active -= e.size;
       w.arrived += e.size;
+      countArrived(w.stats, e.type, goal, w.energies.length, e.size);
       w.energies[goal]! -= e.size;
       if (w.energies[goal]! <= 0) {
         w.energies[goal] = 0;
@@ -580,6 +603,7 @@ function nearest(w: World, t: Turret): Enemy | undefined {
 
 function fire(w: World) {
   for (const t of w.turrets) {
+    w.source = t;
     const reload = t.stats.shotsPerSecond * DT;
     const target = nearest(w, t);
     // Swivel toward the target at the turret's rate; fire only once on target.
@@ -624,6 +648,7 @@ function fire(w: World) {
         break;
     }
   }
+  w.source = w.stats.other;
 }
 
 /** All shots of the tick as one damage budget: the nearest target takes what kills it, the rest spills on. */
@@ -706,7 +731,9 @@ function fireBeam(w: World, t: Turret, first: Enemy, shots: number) {
   while (target && left > 0) {
     if (target.hpEach <= t.stats.damage && target.shield <= 0) {
       const k = Math.min(left, target.size);
+      const before = target.hp;
       killTo(w, target, target.size - k);
+      t.damage += before - target.hp;
       left -= k;
     } else {
       const budget = left * t.stats.damage;

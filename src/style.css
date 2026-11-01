@@ -113,3 +113,50 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
 .panel[hidden], [hidden] { display: none !important; }
 /* Hints only inform: touches and clicks go through to the map beneath (#25). */
 #hint { pointer-events: none; }
+/* Run analysis (#32): the run in brief in the banner, all numbers in a panel. */
+#banner .summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 20px; margin-top: 12px; max-width: min(640px, calc(100vw - 80px)); font-size: 14px; font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+#banner .summary .symbol { font-size: 15px; }
+#banner #analysis-open { margin-top: 14px; font-size: 15px; }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid; vertical-align: -1px; margin-right: 6px; flex-shrink: 0; }
+.chip-inline { margin-left: 10px; font-weight: 600; white-space: nowrap; }
+#analysis h3 { margin: 18px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+table.numbers { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.numbers th { padding: 6px 8px; font-size: 12px; font-weight: 400; color: var(--muted); text-align: right; border-bottom: 1px solid var(--edge); }
+table.numbers td { padding: 8px; text-align: right; border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+table.numbers th:first-child, table.numbers td:first-child { text-align: left; }
+table.numbers .symbol { font-size: 15px; margin-right: 4px; }
+tr.enemy-row { cursor: help; outline: none; }
+tr.enemy-row:hover, tr.enemy-row:focus-visible { background: var(--tile); }
+tr.bucket td { color: var(--muted); }
+.goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+figure.goal { margin: 0; padding: 10px 12px 8px; background: var(--tile); border: 1px solid var(--edge); border-radius: var(--round); }
+figure.goal figcaption { display: flex; justify-content: space-between; font-size: 13px; }
+figure.goal b { font-variant-numeric: tabular-nums; }
+figure.goal b.fell { color: var(--goal); }
+.curve { display: block; width: 100%; height: 56px; margin-top: 8px; }
+.curve .area { fill: rgba(255, 107, 94, 0.18); }
+.curve .stroke { fill: none; stroke: var(--goal); stroke-width: 2; stroke-linejoin: round; }
+.curve .grid { stroke: rgba(255, 255, 255, 0.08); stroke-width: 1; }
+.axis { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The enemy card (#31, #32): floating glass beside a chip or a row. */
+.enemy-card { position: fixed; z-index: 20; width: 330px; max-width: calc(100vw - 16px); padding: 12px 14px; background: var(--panel-strong); border: 1px solid var(--edge); border-radius: 18px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); font-size: 13px; }
+.enemy-card h3 { display: flex; align-items: center; margin: 0 0 4px; font-size: 16px; }
+.enemy-card .dot { width: 14px; height: 14px; }
+.enemy-card .facts { margin: 0 0 8px; color: var(--points); font-variant-numeric: tabular-nums; }
+.enemy-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 6px 0 10px; }
+.enemy-card dt { color: var(--muted); }
+.enemy-card dd { margin: 0; display: flex; align-items: center; gap: 6px; }
+.meter { display: inline-block; width: 70px; height: 6px; border-radius: var(--pill); background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.meter > span { display: block; height: 100%; }
+.meter .hp { background: var(--accent); }
+.meter .shield { background: #b388eb; }
+.verdicts { list-style: none; margin: 0; padding: 8px 0 0; border-top: 1px solid var(--edge); display: grid; gap: 6px; }
+.verdicts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.verdicts li > b { flex: 1 0 100%; font-size: 12px; font-weight: 600; }
+.verdicts li.good > b { color: var(--accent); }
+.verdicts li.bad > b { color: var(--goal); }
+.verdicts li.fair > b { color: var(--muted); }
+.verdicts .kind { white-space: nowrap; }
+.verdicts .symbol { font-size: 13px; margin-right: 3px; }
+.verdicts small { color: var(--muted); font-size: 11px; }
+@media (pointer: coarse) { tr.enemy-row td { padding: 13px 8px; } }

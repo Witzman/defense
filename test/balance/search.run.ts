@@ -93,7 +93,8 @@ it("balancing search", async () => {
     }
     // Two knobs per level, searched in log space: hit points of the level and points per kill. Each round samples
     // VARIANTS points of a box (Halton sequence, so they spread evenly) and the next box closes in on the best one.
-    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(0.1), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
+    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(Math.max(0.1, 1 / BALANCE.killValueGrowth ** level)), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
+    const kvMin = Math.log(Math.max(0.1, 1 / BALANCE.killValueGrowth ** level));
     type Best = { hp: number; kv: number; results: JobResult[]; score: number };
     let best: Best | undefined;
     const genFail = (r: JobResult[]) => r.find((q) => q.profile === "generalist")!.failures;
@@ -101,7 +102,7 @@ it("balancing search", async () => {
     for (let round = 0; round < ROUNDS; round++) {
       const points = Array.from({ length: VARIANTS }, (_, k) => ({
         hp: Math.exp(box.hp[0] + (box.hp[1] - box.hp[0]) * halton(k + 1 + round * VARIANTS, 2)),
-        kv: Math.exp(box.kv[0] + (box.kv[1] - box.kv[0]) * halton(k + 1 + round * VARIANTS, 3)),
+        kv: Math.exp(Math.max(kvMin, box.kv[0]) + (box.kv[1] - box.kv[0]) * halton(k + 1 + round * VARIANTS, 3)),
       }));
       // The current best stays in the field, so a round never loses ground.
       if (best) points[0] = { hp: best.hp, kv: best.kv };

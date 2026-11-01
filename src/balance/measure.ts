@@ -13,22 +13,22 @@ import { TURRET_TYPES } from "../content/turrets.ts";
 /**
  * The balancing criteria of #11 (owner, 2026-11-01): a level is right when
  * - the generalist (typical player) needs 6–14 failed runs,
- * - the optimizer at least 2,
  * - the random player at most 40 (no softlock).
- * The specialist is only watched.
+ * The optimizer and the specialist are only watched (owner, 2026-11-01: the optimizer wins far earlier than any
+ * real player, so a minimum of failures for it cannot hold together with the generalist's).
  */
 export const CORRIDOR = {
   generalist: { min: 6, max: 14, target: 10 },
-  optimizer: { min: 2 },
   random: { max: 40 },
 };
+/** Profiles the search plays; the optimizer is in to hand on its save and for the report, not for the verdict. */
 export const CORRIDOR_PROFILES: Profile[] = ["generalist", "optimizer", "random"];
 
 /** Failed runs after which a profile's verdict is certain, so the run can stop early. */
 export function capFor(profile: Profile): number {
   switch (profile) {
     case "generalist": return CORRIDOR.generalist.max + 2;
-    case "optimizer": return CORRIDOR.optimizer.min;
+    case "optimizer": return 60;
     case "random": return CORRIDOR.random.max + 1;
     case "specialist": return 30;
   }
@@ -38,7 +38,7 @@ export function capFor(profile: Profile): number {
 export function miss(profile: Profile, failures: number, won: boolean): number {
   switch (profile) {
     case "generalist": return !won ? 10 : Math.max(0, CORRIDOR.generalist.min - failures, failures - CORRIDOR.generalist.max);
-    case "optimizer": return Math.max(0, CORRIDOR.optimizer.min - failures);
+    case "optimizer": return 0;
     case "random": return !won ? 10 : Math.max(0, failures - CORRIDOR.random.max) / 4;
     case "specialist": return 0;
   }

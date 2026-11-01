@@ -1,33 +1,30 @@
-# Balancing report (#11, interim)
+# Balancing report (#11, interim, stopped after level 7)
 
-Written by hand from `balance/search.json` (`npm run balance:search`); the older table from #9 is obsolete (it ran on the
-multiplicative tree). Numbers: failed runs before the first win. Corridor: generalist 6–14, optimizer ≥ 2, random ≤ 40.
+Written by hand from `balance/search.json` (`npm run balance:search`). Numbers: failed runs before the first win.
+Corridor (owner, 2026-11-01): generalist 6–14, random ≤ 40; the optimizer and the specialist are only watched.
+Points per kill never below 1 (rounding, "every kill counts").
 
 | Level | hp × | points × | generalist | optimizer | random | in corridor |
 |---|---|---|---|---|---|---|
-| 1 | 0.696 | 0.549 | 11 | 2 | 0 | yes, but not applied (see below) |
-| 2 | 0.829 | 1.238 | 3 | 0 | 6 | no |
-| 3 | 0.224 | 2.154 | 0 | 0 | 1 | no |
-| 4 | 4.472 | 0.167 | 2 | 0 | 11 | no |
+| 1 | 0.954 | 1.735 | 4 | 1 | 8 | no |
+| 2 | 0.224 | 4.101 | 0 | 0 | 1 | no |
+| 3 | 0.224 | 3.623 | 0 | 0 | 0 | no |
+| 4 | 1.000 | 1.025 | 0 | 0 | 0 | no |
+| 5 | 2.115 | 4.309 | 1 | 0 | 4 | no |
+| 6 | 16.01 | 0.892 | 8 | 0 | 0 | yes |
+| 7 | 1.000 | 0.487 | 0 | 0 | 0 | no |
 
-Levels 2–4 are search results, not applied: no combination of the two knobs reached the corridor.
+None of these factors is applied in `BALANCE`; nothing in the game has changed.
 
 ## Findings
 
-- The three bots differ in strength by far more than the corridor allows. From level 2 the optimizer wins on the first
-  try in every variant where the generalist still wins; raising the level's hit points past the generalist's edge sends
-  the generalist and the random player straight to stuck (level 4, generalist: ×5.2 → 0 failures, ×7.8 → 5, ×11.7 → stuck).
-  The window "generalist 6–14 and optimizer ≥ 2" does not exist with hit points and points per kill alone.
-- Failures do not rise smoothly with hit points; the step is about one factor 1.5 wide.
-- Tool bug found on the way: an early-abort cap on a profile left it without a save to hand on, so its next preset was a
-  new game. Fixed: capped profiles play on to the win for the preset.
-- Cost of the search is CPU time per run (map size and route rebuilds), not game time: level 10 run ≈ 3 s, `sampleFlow` ≈ 11 s.
-  The probe is cached per process now, but every job is its own process, so it helps little.
+- The generalist's failures are not smooth in the level's hit points: at level 4 (earlier run) ×5.2 gave 0 failures, ×7.8
+  gave 5, ×11.7 stuck. Two knobs (hit points, points per kill) find the window only on some levels (6 of 7 miss).
+- The optimizer wins at once nearly everywhere; it cannot be held to a minimum of failures (criterion dropped).
+- Tool bug fixed: a profile cut short by its early-abort cap had no save to hand on.
+- Search cost is CPU time per run (map size, route rebuilds): about 80 s for level 1, 1,300 s for level 6, 440 s for level 7.
 
-- Level 1's points factor 0.549 makes the first kills worth under 1 point, which rounds to 0 and breaks the rule "every kill
-  counts" (`test/game/points.test.ts`). So it is not applied; the knob needs a floor or the points need finer rounding first.
+## Stopped on purpose
 
-## Decision needed (owner)
-
-Relax the optimizer criterion (≥ 2 → "observe only", like the specialist) or give the generalist more reach. Until then
-levels 1–25 are not tuned; nothing in `BALANCE` has changed.
+Owner 2026-11-01 stopped the run: #41 (turning angle by research), #40 (collisions) and #42 (tree interactions) change
+the game under the measurement. Tune again after them; presets in `balance/presets/` are from this run and stale then.

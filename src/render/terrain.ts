@@ -109,8 +109,8 @@ const MAX_SCALE = 24;
 const DEPTHS = [0.9, 1.9, 3.2];
 
 /**
- * The map as an atlas sheet (#16): paper land with beach, meadow and forest in OpenStreetMap colours; water shaded
- * from shallow to deep with the depth lines of a sea chart; a blue coastline. Drawn once per level.
+ * The map as an atlas sheet at night (#16, #26): dark land with beach, meadow and forest; water shaded from shallow to
+ * deep with a hint of the depth lines of a sea chart; a glowing coastline. Drawn once per level.
  */
 export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
   const S = Math.min(MAX_SCALE, Math.sqrt(PIXEL_BUDGET / (map.width * map.height)));
@@ -144,7 +144,7 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
         blend(MAP.waterDeep, t);
         for (const d of DEPTHS) {
           const a = 1 - Math.abs(v - d) / depthPx;
-          if (a > 0) blend(MAP.depthLine, 0.35 * Math.min(1, a));
+          if (a > 0) blend(MAP.depthLine, MAP.depthAlpha * Math.min(1, a));
         }
       } else {
         const inland = -v;
@@ -156,6 +156,8 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
       }
       const a = 1 - Math.abs(v) / coastPx;
       if (a > 0) blend(MAP.coast, 0.95 * Math.min(1, a));
+      // Halo of the coast, into the water only: the shore glows, the land stays dark.
+      else if (v > 0 && v < 0.6) blend(MAP.coast, MAP.coastGlow * (1 - v / 0.6) ** 2);
       const grain = (hash(x, y) - 0.5) * MAP.grain;
       const o = (y * c.width + x) * 4;
       px[o] = out[0]! + grain;
@@ -184,5 +186,5 @@ export function drawTerrain(map: GameMap, field: Field): HTMLCanvasElement {
   return c;
 }
 
-/** Colour of the paper around the map. */
+/** Colour of the land around the map. */
 export const PAPER = css(MAP.land);

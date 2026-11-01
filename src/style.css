@@ -2,7 +2,7 @@
    glass with a cyan edge. Same colours as src/render/theme.ts. */
 @font-face { font-family: Sora; src: url("./fonts/sora-latin.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
 :root {
-  --paper: #eee6cf;
+  --paper: #1e2928;
   --ink: #0a1624;
   --panel: rgba(10, 22, 36, 0.82);
   --panel-strong: rgb(13, 25, 38); /* opaque: big panels and their sticky headers must not show the map through */

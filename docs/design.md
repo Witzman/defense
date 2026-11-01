@@ -1,8 +1,8 @@
 # Design language "Fluid"
 
-Flow Defense looks like a **sea chart crossed with an OpenStreetMap atlas**, on which the enemy mass **glows as a
-liquid** and the controls **float above as dark glass**. Two layers, two materials: the world is paper and ink, the
-interface is glass and light. Everything new follows these rules; the values live in code, not here.
+Flow Defense looks like a **sea chart crossed with an OpenStreetMap atlas, drawn at night**, on which the enemy mass
+**glows as a liquid** and the controls **float above as dark glass**. The world is dark and quiet, everything that
+moves or acts is light. (#16 started with a pale paper atlas; its contrast was too low, #26 turned it dark.) Everything new follows these rules; the values live in code, not here.
 
 | Where | What |
 |---|---|
@@ -14,14 +14,17 @@ interface is glass and light. Everything new follows these rules; the values liv
 
 ## Colour
 
-- **Map: paper and water.** Land is warm paper (`#eee6cf`) with beach, meadow and woodland in the muted colours
-  OpenStreetMap uses; water runs from shallow `#9cc4d3` at the shore to deep `#79a8be`, with the depth lines of a sea
-  chart and a blue-grey coastline. The map is pale and quiet, so that everything that moves stands out.
+- **Map: dark land, dark water, a glowing coast.** Land is dark green-grey (`#1e2928`) with beach, meadow and
+  woodland as faint shifts of it; water runs from shallow `#16324a` at the shore to deep `#0c1b2e`, with only a hint
+  of depth lines; the coastline is a thin cyan line with a faint halo into the water. The map stays quiet, so that
+  everything that moves stands out.
+- **Contrast is tested** (`test/render/theme.test.ts`): every enemy colour against shallow and deep water at least
+  4.5:1 (WCAG), every turret ring against every kind of land at least 3:1. A new colour must pass it.
 - **Enemies own the saturated colours.** Each type keeps its colour (`src/content/enemies.ts`) — the colour is how a
   player tells types apart (#2). Nothing on the map may use a saturated colour that could be mistaken for an enemy.
 - **Turrets own their ring colour** (`src/content/turrets.ts`); their shots carry the same colour.
 - **Glass:** ink `#0a1624` at 82 % with a cyan edge `rgba(120, 220, 205, 0.25)`; text `#dcebea`, muted `#8fa9ab`.
-- **Signals:** accent cyan `#7ee0d2` (primary action, titles, selection), coral `#ff6b5e` (goals, goal energy),
+- **Signals:** accent cyan `#7ee0d2` (primary action, titles, selection, coast), coral `#ff6b5e` (goals, goal energy),
   gold `#ffd36b` (research points, ready ability, spawns).
 
 ## Type
@@ -45,8 +48,8 @@ interface is glass and light. Everything new follows these rules; the values liv
 - **The mass is a liquid.** Blobs melt into one body with a sharp surface and a pale halo; fuller parts shine
   brighter; up close each member catches a highlight, so single blobs stay countable. The liquid stays in the water:
   it is cut off where the shore begins (#11).
-- **Fire is light with a dark rim.** Every shot, beam, flash and blast has a dark rim under its bright core, so it
-  reads on the pale map and on the bright mass alike. Fire fades over a few ticks instead of blinking for one:
+- **Fire is light.** Blasts and flames are drawn additively, so they light up the dark map; bolts, beams and flashes
+  keep a dark rim under their bright core, so they also read on the bright mass. Fire fades over a few ticks instead of blinking for one:
   bolts fly on and fade, blasts leave a shock ring, impacts throw sparks. A player must be able to see which turret
   is working.
 - **Turrets are dark glass** with a ring and barrel in their colour and a soft glow of the same colour.

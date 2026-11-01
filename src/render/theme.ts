@@ -1,25 +1,30 @@
 /**
- * Design language "Fluid" (#16): a sea chart crossed with an OpenStreetMap atlas, on which the enemy mass glows as a
- * liquid and the controls float as dark glass. docs/design.md explains the rules; these are the values. The CSS
- * custom properties in style.css carry the same colours for the interface.
+ * Design language "Fluid" (#16, #26): an atlas drawn at night — dark land and water with the drawing of a sea chart
+ * and an OpenStreetMap atlas — on which the enemy mass glows as a liquid and the controls float as dark glass.
+ * docs/design.md explains the rules; these are the values. The CSS custom properties in style.css carry the same
+ * colours for the interface. The map is dark so that everything that moves has contrast (test/render/theme.test.ts).
  */
 
 export type Rgb = readonly [number, number, number];
 
 export const MAP = {
-  /** Land as paper; also everything outside the map. */
-  land: [238, 230, 207] as Rgb,
-  sand: [236, 222, 178] as Rgb,
-  meadow: [214, 226, 178] as Rgb,
-  forest: [182, 205, 160] as Rgb,
-  forestInk: "rgba(96, 128, 82, 0.85)",
+  /** Land; also everything outside the map. */
+  land: [30, 41, 40] as Rgb,
+  sand: [41, 53, 48] as Rgb,
+  meadow: [33, 47, 41] as Rgb,
+  forest: [26, 37, 33] as Rgb,
+  forestInk: "rgba(110, 150, 120, 0.4)",
   /** Shallow water at the shore, deep water far from it. */
-  water: [156, 196, 211] as Rgb,
-  waterDeep: [121, 168, 190] as Rgb,
-  depthLine: [64, 104, 122] as Rgb,
-  coast: [64, 104, 122] as Rgb,
-  /** Paper grain: ± this much per channel. */
-  grain: 6,
+  water: [22, 50, 74] as Rgb,
+  waterDeep: [12, 27, 46] as Rgb,
+  /** Depth lines: only a hint (owner, #26). */
+  depthLine: [120, 220, 205] as Rgb,
+  depthAlpha: 0.1,
+  /** The coast: a thin glowing line with a faint halo into the water. */
+  coast: [120, 220, 205] as Rgb,
+  coastGlow: 0.22,
+  /** Grain: ± this much per channel. */
+  grain: 4,
 };
 
 export const GLASS = {
@@ -33,8 +38,8 @@ export const SIGNAL = {
   goal: "#ff6b5e",
   goalCore: "#ffe3de",
   goalEdge: "#7a2e2a",
-  spawn: "#9a6a00",
-  spawnCore: "#ffd36b",
+  spawn: "#ffd36b",
+  spawnCore: "#fff1c2",
   invalid: "rgba(226, 72, 61, 0.55)",
   spark: "#fff6d0",
 };

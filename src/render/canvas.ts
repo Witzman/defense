@@ -182,9 +182,12 @@ function drawShot(g: CanvasRenderingContext2D, shot: Shot, at: (x: number, y: nu
       grad.addColorStop(0, `rgba(255, 244, 200, ${0.9 * fade})`);
       grad.addColorStop(0.55, `rgba(255, 150, 60, ${0.55 * fade})`);
       grad.addColorStop(1, "rgba(255, 110, 40, 0)");
+      // Fire adds light: on the dark map it glows instead of muddying the water.
       g.globalAlpha = 1;
+      g.globalCompositeOperation = "lighter";
       g.fillStyle = grad;
       disc(g, x, y, r);
+      g.globalCompositeOperation = "source-over";
     }
     // Shock wave: a ring that runs out as it fades.
     g.globalAlpha = 0.45 * fade * fade;
@@ -204,12 +207,14 @@ function drawShot(g: CanvasRenderingContext2D, shot: Shot, at: (x: number, y: nu
     grad.addColorStop(0.45, `rgba(255, 123, 57, ${0.6 * fade})`);
     grad.addColorStop(1, "rgba(200, 40, 20, 0)");
     g.globalAlpha = 1;
+    g.globalCompositeOperation = "lighter";
     g.fillStyle = grad;
     g.beginPath();
     g.moveTo(x, y);
     g.arc(x, y, r, shot.aim - shot.angle / 2, shot.aim + shot.angle / 2);
     g.closePath();
     g.fill();
+    g.globalCompositeOperation = "source-over";
   }
   g.globalAlpha = 1;
 }

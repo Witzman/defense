@@ -1,5 +1,5 @@
 import { cellAt, LAND, type GameMap, type Point } from "./map.ts";
-import { distanceField } from "./flow.ts";
+import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
 import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
@@ -11,6 +11,11 @@ export const DT = 1 / 30;
 export const REROUTE_TICKS = 15;
 /** Extra cost of a cell at full congestion, as a multiple of its length. */
 const CONGESTION_COST = 6;
+/**
+ * Depth (cells from the nearest land, see flow.ts depthField) at which water counts as deep (#27). Shallowness falls
+ * from 1 on the shore (depth 1) to 0 here; a type's extra cost on a cell is its depthPreference times the shallowness.
+ */
+export const DEEP_WATER = 4;
 /** Weight of the newest load in the smoothed congestion; the rest is memory (hysteresis). */
 const CONGESTION_SMOOTHING = 0.4;
 /** Load (share of capacity) below which a cell counts as free flowing, not congested. */
@@ -120,6 +125,26 @@ export type Shot =
 
 export type Status = "running" | "won" | "lost";
 
+/** The route field shared by all enemy types with the same depth preference (#27). */
+export interface Route {
+  preference: number;
+  /** Cost factor per cell from shallowness, 1 + preference × shallowness; undefined when the preference is 0. */
+  shore?: Float32Array;
+  /** Route cost to the goal per cell, including congestion and shore. 0 at the goal. */
+  field: Float64Array;
+}
+
+/** Cost factor per cell for a depth preference: 1 in deep water, 1 + preference on the shore. */
+export function shoreCost(depth: Float64Array, preference: number): Float32Array | undefined {
+  if (preference <= 0) return undefined;
+  const cost = new Float32Array(depth.length);
+  for (let i = 0; i < depth.length; i++) {
+    const shallow = Math.min(1, Math.max(0, (DEEP_WATER - depth[i]!) / (DEEP_WATER - 1)));
+    cost[i] = 1 + preference * shallow;
+  }
+  return cost;
+}
+
 interface GroupState {
   group: EnemyGroup;
   type: EnemyType;
@@ -133,8 +158,12 @@ export interface World {
   arsenal: Arsenal;
   packet: number;
   cellCapacity: number;
-  /** Route cost to the goal per cell, including congestion. 0 at the goal. */
-  field: Float64Array;
+  /** Water depth per cell: distance to the nearest land, 1 on the shore, 0 on land (#27). Fixed per map. */
+  depth: Float64Array;
+  /** One route field per distinct depth preference among the types in the level, in order of first appearance. */
+  routes: Route[];
+  /** The route each enemy type walks. */
+  routeOf: Map<string, Route>;
   /** Enemies per cell right now (sum of blob sizes). */
   density: Float64Array;
   /** Smoothed congestion per cell, 0 (free) to 1 (full). */
@@ -201,7 +230,9 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     arsenal,
     packet: Math.max(1, Math.floor(level.enemies.packet ?? 1)),
     cellCapacity: level.cellCapacity ?? 3,
-    field: distanceField(level.map, level.map.goals),
+    depth: depthField(level.map),
+    routes: [],
+    routeOf: new Map(),
     density: new Float64Array(level.map.cells.length),
     congestion: new Float32Array(level.map.cells.length),
     groups,
@@ -231,6 +262,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     },
     spawnBlob: (type, size, x, y) => {
       const t = enemyType(type);
+      routeFor(w, t);
       const e: Enemy = {
         id: w.nextId++, type, x, y, px: x, py: y, size,
         hp: size * t.hp * hpScale, shield: size * t.shield * hpScale, hpEach: t.hp * hpScale,
@@ -253,6 +285,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       });
     },
   };
+  for (const g of groups) routeFor(w, g.type);
   const placed: Placement[] = [];
   for (const p of placements) {
     if (!canPlace(level, arsenal, placed, p)) throw new Error(`invalid placement ${p.kind} at ${p.x},${p.y}`);
@@ -377,6 +410,37 @@ function spawn(w: World) {
   }
 }
 
+/** The route of a type; a preference not seen yet gets its own field, built from the congestion as it stands. */
+function routeFor(w: World, t: EnemyType): Route {
+  let route = w.routeOf.get(t.id);
+  if (route) return route;
+  route = w.routes.find((r) => r.preference === t.depthPreference);
+  if (!route) {
+    const shore = shoreCost(w.depth, t.depthPreference);
+    route = { preference: t.depthPreference, shore, field: new Float64Array(0) };
+    route.field = distanceField(w.level.map, w.level.map.goals, withShore(congestionCost(w), shore));
+    w.routes.push(route);
+  }
+  w.routeOf.set(t.id, route);
+  return route;
+}
+
+function congestionCost(w: World): Float32Array | undefined {
+  if (w.congestion.every((c) => c === 0)) return undefined;
+  const cost = new Float32Array(w.congestion.length);
+  for (let i = 0; i < cost.length; i++) cost[i] = 1 + CONGESTION_COST * w.congestion[i]!;
+  return cost;
+}
+
+/** Congestion and shore cost together; either may be absent (cost 1 everywhere). */
+function withShore(crowd: Float32Array | undefined, shore: Float32Array | undefined): Float32Array | undefined {
+  if (!shore) return crowd;
+  if (!crowd) return shore;
+  const cost = new Float32Array(crowd.length);
+  for (let i = 0; i < cost.length; i++) cost[i] = crowd[i]! * shore[i]!;
+  return cost;
+}
+
 function reroute(w: World) {
   const cost = new Float32Array(w.density.length);
   for (let i = 0; i < cost.length; i++) {
@@ -387,7 +451,7 @@ function reroute(w: World) {
     w.congestion[i] = c;
     cost[i] = 1 + CONGESTION_COST * c;
   }
-  w.field = distanceField(w.level.map, w.level.map.goals, cost);
+  for (const route of w.routes) route.field = distanceField(w.level.map, w.level.map.goals, withShore(cost, route.shore));
 }
 
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [
@@ -406,7 +470,8 @@ function move(w: World) {
     const cx = Math.floor(e.x);
     const cy = Math.floor(e.y);
     const ci = cy * map.width + cx;
-    const here = w.field[ci]!;
+    const field = w.routeOf.get(e.type)!.field;
+    const here = field[ci]!;
     if (here === 0) {
       const goal = Math.max(0, w.goalAt[ci]!);
       w.density[ci]! -= e.size;
@@ -430,7 +495,7 @@ function move(w: World) {
       const ni = ny * map.width + nx;
       // A diagonal step needs water on both sides, or the blob cuts across an island corner (#11).
       if (dx !== 0 && dy !== 0 && (map.cells[cy * map.width + nx] === LAND || map.cells[ny * map.width + cx] === LAND)) continue;
-      const d = w.field[ni]!;
+      const d = field[ni]!;
       if (d < best && fits(ni, e.size)) {
         best = d;
         tx = nx;

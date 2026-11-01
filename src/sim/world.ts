@@ -183,6 +183,9 @@ export interface World {
   congestion: Float32Array;
   /** Where enemies died lately (#39), in cell capacities; blurred and fading. Read as 0..1 by `dangerAt`. */
   danger: Float32Array;
+  /** Scratch per tick (#40): mass and mass × speed of the blobs per cell, for the mean pace of a cell. */
+  paceMass: Float64Array;
+  paceSum: Float64Array;
   groups: GroupState[];
   rng: Rng;
   tick: number;
@@ -255,6 +258,8 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     density: new Float64Array(level.map.cells.length),
     congestion: new Float32Array(level.map.cells.length),
     danger: new Float32Array(level.map.cells.length),
+    paceMass: new Float64Array(level.map.cells.length),
+    paceSum: new Float64Array(level.map.cells.length),
     groups,
     rng: createRng(seed),
     tick: 0,
@@ -539,6 +544,19 @@ function reroute(w: World) {
   for (const route of w.routes) route.field = distanceField(w.level.map, w.level.map.goals, routeCost(w, route, cost));
 }
 
+/** Mean pace of the blobs in the 3 × 3 cells around (cx, cy), weighted by their mass; `own` if there are none. */
+function meanPace(w: World, cx: number, cy: number, own: number): number {
+  const { width, height } = w.level.map;
+  let mass = 0;
+  let sum = 0;
+  for (let y = Math.max(0, cy - 1); y <= Math.min(height - 1, cy + 1); y++)
+    for (let x = Math.max(0, cx - 1); x <= Math.min(width - 1, cx + 1); x++) {
+      mass += w.paceMass[y * width + x]!;
+      sum += w.paceSum[y * width + x]!;
+    }
+  return mass > 0 ? sum / mass : own;
+}
+
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [
   [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1],
 ];
@@ -548,10 +566,23 @@ function move(w: World) {
   const survivors: Enemy[] = [];
   /** Room for `size` more; an empty cell always takes a blob, or an oversized blob could never move. */
   const fits = (i: number, size: number) => w.density[i] === 0 || w.density[i]! + size <= w.cellCapacity;
+  // Cohesion (#40): blobs in one cell stick together. Each is pulled towards the mean pace of its cell, so a fast type
+  // cannot run through a slow one, and a slowed blob holds back the ones around it; and its lane within the cell
+  // narrows, so the stream is one mass instead of single dots. 0 = the old, independent blobs.
+  const stick = BALANCE.cohesion;
+  const { paceMass, paceSum } = w;
+  paceMass.fill(0);
+  paceSum.fill(0);
+  for (const e of w.enemies) {
+    if (e.slowUntil < w.tick) e.speed = e.baseSpeed;
+    const i = Math.floor(e.y) * map.width + Math.floor(e.x);
+    paceMass[i]! += e.size;
+    paceSum[i]! += e.size * e.speed;
+  }
+  const lane = 1 - 0.6 * stick;
   for (const e of w.enemies) {
     e.px = e.x;
     e.py = e.y;
-    if (e.slowUntil < w.tick) e.speed = e.baseSpeed;
     const cx = Math.floor(e.x);
     const cy = Math.floor(e.y);
     const ci = cy * map.width + cx;
@@ -590,10 +621,12 @@ function move(w: World) {
     }
     if (tx >= 0) {
       // Each blob aims at its own spot in the next cell, so a stream has width instead of a single file.
-      const vx = tx + 0.5 + laneX(e.id) - e.x;
-      const vy = ty + 0.5 + laneY(e.id) - e.y;
+      const vx = tx + 0.5 + laneX(e.id) * lane - e.x;
+      const vy = ty + 0.5 + laneY(e.id) * lane - e.y;
       const len = Math.hypot(vx, vy);
-      const k = Math.min(1, (e.speed * DT) / len);
+      const mean = meanPace(w, cx, cy, e.speed);
+      const pace = e.speed * (1 - stick) + mean * stick;
+      const k = Math.min(1, (pace * DT) / len);
       e.x += vx * k;
       e.y += vy * k;
       offShore(map, e);

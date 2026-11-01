@@ -7,7 +7,8 @@ Playable now: a campaign of 25 levels (`src/content/levels.ts`), from 70 single 
 a million enemies, from one spawn and goal to four spawns and three goals. A new
 game starts without turrets and with research points; research unlocks and strengthens the
 cannon, every run (won or lost) earns points, a win opens the next level. Progress is saved
-on the server after every run, purchase and start. Mouse wheel zooms, dragging pans, `0`
+in the browser (localStorage) after every run, purchase and start; the campaign panel exports
+it to a file and imports it again, for a backup or another device. Mouse wheel zooms, dragging pans, `0`
 resets the view.
 
 Twelve turret kinds deal five damage types in seven patterns (single, splash, cone, beam,
@@ -23,8 +24,7 @@ Enemies flow, they are not pushed: every water cell holds at most `cellCapacity`
 cell is not entered, and congestion raises the route cost so the stream spills into other
 channels. One simulated blob stands for `packet` enemies, so mass levels keep the blob count
 bounded. `npx vitest bench --run test/sim/perf.bench.ts` measures a simulation step.
-A Node server serves the built game and stores the save game in Postgres, delivered
-with Docker Compose.
+A small Node server serves the built game, delivered with Docker Compose; there is no database.
 
 ## Code
 
@@ -32,11 +32,11 @@ with Docker Compose.
 |---|---|
 | `src/sim/` | deterministic simulation: seeded map generator, distance field, run rules (fixed step 1/30 s); no DOM, runs headless |
 | `src/content/` | level data, enemy types (resistances, shields), turret kinds (damage type, pattern, base stats) |
-| `src/game/` | research (nodes, effects, loadout), points formula, save game (versioned, validated), server client |
+| `src/game/` | research (nodes, effects, loadout), points formula, save game (versioned, validated), browser storage and file export |
 | `src/render/` | canvas view; reads the world, never changes it |
 | `src/ui/` | research tree view (pan, zoom, info column, purchase) |
 | `src/main.ts` | page: preparation, run loop, HUD |
-| `server/` | HTTP server and Postgres store |
+| `server/` | HTTP server for the built game |
 
 Under a path prefix (Dokploy domain with path `/defense` and Strip Path on) the page
 works because every URL is relative; `/defense` redirects to `/defense/`.
@@ -44,29 +44,27 @@ works because every URL is relative; `/defense` redirects to `/defense/`.
 ## Run it
 
 ```sh
-# whole stack, as deployed: http://localhost:3000
-POSTGRES_PASSWORD=dev docker compose -f compose.yaml -f compose.local.yaml up --build
+# as deployed: http://localhost:3000
+docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 
-For development, run the stack (or only `db`) and start Vite with `npm run dev`;
-it forwards `/api` and `/healthz` to the server on port 3000.
+For development, `npm run dev` (Vite) is enough.
 
 ## Test
 
 ```sh
 npm ci
 npm run typecheck
-npm test     # store tests need a THROWAWAY Postgres (they empty the table): set PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+npm test
 npm run build
 ```
 
 ## Deploy (Dokploy)
 
 - Compose project from this repository, branch `main`, compose file `compose.yaml`.
-- Environment: `POSTGRES_PASSWORD`. Postgres reads it only when the volume is first created;
-  changing it later locks the app out until the password is changed inside the database too.
+- No environment variables.
 - Domain on service `app`, port `3000`.
-- The save game lives in the volume `pgdata`; it survives redeploys.
+- The save game lives in each player's browser, not on the server; redeploys never touch it.
 
 ## Balancing
 
@@ -80,9 +78,6 @@ in `npm test`. The curves it tunes live in `src/content/balance.ts`.
 
 | Path | |
 |---|---|
-| `GET /api/save` | the save game as JSON, `404` while there is none |
-| `PUT /api/save` | stores a JSON object with an integer `version`, at most 5 MB |
-| `GET /healthz` | `200` while the database answers, else `503` |
+| `GET /healthz` | `200` while the server runs |
+| `/api/…` | `404` |
 | everything else | the built game from `dist/` |
-
-The prototype has one global save game (slot `global`). With login the slot becomes the user id.

@@ -1,6 +1,6 @@
 import { enemyCount, LEVELS } from "./content/levels.ts";
 import { TURRET_TYPES, turretType, type TurretKind } from "./content/turrets.ts";
-import { createSaver, loadSave } from "./game/api.ts";
+import { createSaver, exportName, exportText, importText, loadSave } from "./game/storage.ts";
 import { runPoints } from "./game/points.ts";
 import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
@@ -43,7 +43,7 @@ const trail = new Trail();
 
 const saver = createSaver((state) => {
   const el = $("save-state");
-  el.textContent = state === "saved" ? "gespeichert" : state === "saving" ? "speichert …" : "nicht gespeichert – neuer Versuch";
+  el.textContent = state === "saved" ? "gespeichert" : "nicht gespeichert – Browser-Speicher voll oder gesperrt";
   el.classList.toggle("failed", state === "failed");
 });
 /** False when the stored game could not be read: then nothing is written, so a broken load never overwrites it. */
@@ -322,6 +322,37 @@ $("research-open").addEventListener("click", () => {
   renderResearch();
 });
 
+/** The save as a file (#24): the browser may clear its storage, and a file carries the game to another device. */
+$("export").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([exportText(save)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = exportName();
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+const importInput = $<HTMLInputElement>("import-file");
+$("import").addEventListener("click", () => phase !== "run" && importInput.click());
+importInput.addEventListener("change", async () => {
+  const file = importInput.files?.[0];
+  importInput.value = "";
+  if (!file) return;
+  let next: Save;
+  try {
+    next = importText(await file.text());
+  } catch (err) {
+    alert((err as Error).message);
+    return;
+  }
+  if (!confirm("Spielstand aus der Datei laden? Der aktuelle Stand in diesem Browser wird ersetzt.")) return;
+  canStore = true;
+  $("save-state").classList.remove("failed");
+  closePanels();
+  selected = undefined;
+  commit(next);
+  openLevel(Math.min(save.unlockedLevel, LEVELS.length - 1));
+});
+
 /** Starts over from an empty save: research, points, levels and placements are gone. Asks first. */
 $("new-game").addEventListener("click", () => {
   if (phase === "run") return;
@@ -407,9 +438,10 @@ function frame(now: number) {
 
 async function boot() {
   try {
-    save = await loadSave();
+    save = loadSave();
   } catch (err) {
-    // No server, or a save this build cannot read: play a fresh game but never write over the stored one.
+    // No storage, or a save this build cannot read: play a fresh game but never write over the stored one.
+    // Importing a file (campaign panel) writes again.
     console.warn(err);
     save = emptySave();
     canStore = false;

@@ -2,7 +2,7 @@ import type { GameMap, Point } from "../sim/map.ts";
 import type { Placement, Shot, World } from "../sim/world.ts";
 import { turretType, type TurretKind } from "../content/turrets.ts";
 import { drawTerrain, sheetScale, shoreField, TerrainDetail, PAPER } from "./terrain.ts";
-import { mapLabels, type Label } from "./labels.ts";
+import { mapLabels, placeLabels, type Box, type Label, type LabelBox, type Placed } from "./labels.ts";
 import { Fluid } from "./fluid.ts";
 import { GLASS, MAP, SIGNAL } from "./theme.ts";
 
@@ -83,11 +83,12 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
   g.drawImage(scene.terrain, ox, oy, map.width * s, map.height * s);
   scene.detail.draw(g, view);
   const at = (x: number, y: number) => [ox + x * s, oy + y * s] as const;
-  drawLabels(g, scene.labels, at, s, overlay.dpr ?? 1);
-
-  // Spawns as springs (rings welling outward), goals as harbours that fade as their energy drains.
+  const dpr = overlay.dpr ?? 1;
   // Markers keep a minimum size so they read from afar.
   const marker = Math.max(s, 8);
+  drawLabels(g, scene.labels, at, s, dpr, w, marker);
+
+  // Spawns as springs (rings welling outward), goals as harbours that fade as their energy drains.
   g.strokeStyle = SIGNAL.spawn;
   g.lineWidth = Math.max(2.5, s * 0.1);
   for (const p of map.spawns) {
@@ -125,7 +126,6 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
 
   // Range of every turret while preparing, then the turrets themselves.
   if (overlay.arcs) for (const t of w.turrets) drawArc(g, ...at(t.x, t.y), t.placement, t.stats.range * s, t.kind);
-  const dpr = overlay.dpr ?? 1;
   for (const t of w.turrets) drawTurret(g, ...at(t.x, t.y), s, t.kind, t.aim, 1, dpr);
 
   // Fire with afterglow: older ticks fainter.
@@ -149,32 +149,86 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
   }
 }
 
+/** Pools for placing the lettering, kept across frames so a frame allocates next to nothing. */
+const labelBoxes: (LabelBox & { label: Label; text: string })[] = [];
+const labelObstacles: Box[] = [];
+const labelPlaced: Placed[] = [];
+/** Lettering order: harbours and springs first (they belong to a marker), then islands, then waters. */
+const LABEL_ORDER = ["place", "island", "water"] as const;
+
+function labelFont(g: CanvasRenderingContext2D, kind: Label["kind"], dpr: number) {
+  if (kind === "water") {
+    g.font = `italic 500 ${Math.round(16 * dpr)}px Alegreya, Georgia, serif`;
+    g.letterSpacing = `${dpr}px`;
+  } else {
+    g.font = `500 ${Math.round((kind === "island" ? 13 : 12) * dpr)}px Alegreya, Georgia, serif`;
+    g.letterSpacing = `${2 * dpr}px`;
+  }
+}
+
 /**
  * Names on the map (#18), in screen size so they stay legible at every zoom: waters in italics, islands and places in
- * spaced capitals, each on a dark halo. Hidden while the map is too small for them to fit.
+ * spaced capitals, each on a dark halo. Hidden while the map is too small for them to fit. Each name keeps clear of
+ * spawns, goals, turrets and the names before it (#38): it moves aside or, failing that, is left out.
  */
-function drawLabels(g: CanvasRenderingContext2D, labels: readonly Label[], at: (x: number, y: number) => readonly [number, number], s: number, dpr: number) {
+function drawLabels(g: CanvasRenderingContext2D, labels: readonly Label[], at: (x: number, y: number) => readonly [number, number], s: number, dpr: number, w: World, marker: number) {
   if (s < 5 * dpr) return;
+  const map = w.level.map;
+  let nObs = 0;
+  const obstacle = (x: number, y: number, r: number) => {
+    const b = labelObstacles[nObs] ?? (labelObstacles[nObs] = { x0: 0, y0: 0, x1: 0, y1: 0 });
+    b.x0 = x - r;
+    b.y0 = y - r;
+    b.x1 = x + r;
+    b.y1 = y + r;
+    nObs++;
+  };
+  for (const p of [map.spawns, map.goals])
+    for (const q of p) {
+      const [x, y] = at(q.x + 0.5, q.y + 0.5);
+      obstacle(x, y, marker * 1.1);
+    }
+  const reach = turretReach(s, dpr);
+  for (const t of w.turrets) {
+    const [x, y] = at(t.x, t.y);
+    obstacle(x, y, reach);
+  }
+
+  let n = 0;
+  for (const kind of LABEL_ORDER) {
+    labelFont(g, kind, dpr);
+    const h = (kind === "water" ? 16 : 13) * dpr;
+    for (const l of labels) {
+      if (l.kind !== kind) continue;
+      const [x, y] = at(l.x, l.y);
+      if (x < -200 || y < -50 || x > g.canvas.width + 200 || y > g.canvas.height + 50) continue;
+      const text = kind === "water" ? l.text : l.text.toUpperCase();
+      const b = labelBoxes[n] ?? (labelBoxes[n] = { x: 0, y: 0, w: 0, h: 0, label: l, text });
+      b.label = l;
+      b.text = text;
+      b.x = x;
+      b.y = y;
+      // The halo (3 px) and the trailing letter spacing widen the box a little.
+      b.w = g.measureText(text).width + 3 * dpr;
+      b.h = h + 3 * dpr;
+      n++;
+    }
+  }
+  placeLabels(labelBoxes, labelObstacles, labelPlaced, 2 * dpr, n, nObs);
+
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.lineJoin = "round";
   g.lineWidth = 3 * dpr;
   g.strokeStyle = MAP.labelHalo;
-  for (const l of labels) {
-    const [x, y] = at(l.x, l.y);
-    if (x < -200 || y < -50 || x > g.canvas.width + 200 || y > g.canvas.height + 50) continue;
-    if (l.kind === "water") {
-      g.font = `italic 500 ${Math.round(16 * dpr)}px Alegreya, Georgia, serif`;
-      g.letterSpacing = `${dpr}px`;
-      g.fillStyle = MAP.labelWater;
-    } else {
-      g.font = `500 ${Math.round((l.kind === "island" ? 13 : 12) * dpr)}px Alegreya, Georgia, serif`;
-      g.letterSpacing = `${2 * dpr}px`;
-      g.fillStyle = MAP.labelLand;
-    }
-    const text = l.kind === "water" ? l.text : l.text.toUpperCase();
-    g.strokeText(text, x, y);
-    g.fillText(text, x, y);
+  for (let i = 0; i < n; i++) {
+    const p = labelPlaced[i]!;
+    if (!p.visible) continue;
+    const b = labelBoxes[i]!;
+    labelFont(g, b.label.kind, dpr);
+    g.fillStyle = b.label.kind === "water" ? MAP.labelWater : MAP.labelLand;
+    g.strokeText(b.text, p.x, p.y);
+    g.fillText(b.text, p.x, p.y);
   }
   g.letterSpacing = "0px";
 }

@@ -103,6 +103,8 @@ export function campaignLevel(i: number): LevelDef {
     enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i, speed: ENEMY_SPEED, packet },
     goalEnergy: Math.max(1, Math.round((total * GOAL_TOLERANCE) / goals)),
     cellCapacity: 3 * packet,
+    // Every level has its own run, the same on every try (#28).
+    runSeed: 30_000 + i * 7919,
   };
 }
 

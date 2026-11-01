@@ -47,6 +47,11 @@ export interface LevelDef {
   goalEnergy: number;
   /** Enemies one water cell holds. A full cell is not entered: the stream queues and spills, it never compresses. */
   cellCapacity?: number;
+  /**
+   * Seed of the run's chance (where each blob appears at its spawn). Fixed per level (#28): the same set-up plays the
+   * same run every time; only what the player changes changes the outcome.
+   */
+  runSeed?: number;
 }
 
 /** What research gives the player for a run: per turret kind how many may stand and how strong each is. */
@@ -182,7 +187,7 @@ function angleDiff(a: number, b: number): number {
   return d;
 }
 
-export function createWorld(level: LevelDef, arsenal: Arsenal, placements: readonly Placement[], seed: number): World {
+export function createWorld(level: LevelDef, arsenal: Arsenal, placements: readonly Placement[], seed = level.runSeed ?? 1): World {
   const hpScale = level.enemies.hpScale ?? 1;
   const groups: GroupState[] = level.enemies.groups.map((g) => ({
     group: g,

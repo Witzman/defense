@@ -74,7 +74,7 @@ export function playCampaign(o: CampaignOptions): { results: LevelResult[]; save
       const order = bestKinds(level).filter((k) => arsenal.turrets[k]);
       for (const k of TURRET_TYPES.map((t) => t.id)) if (arsenal.turrets[k] && !order.includes(k)) order.push(k);
       const placements = placeGreedy(level, arsenal, flow, order);
-      const w = createWorld(level, arsenal, placements, runs + 1);
+      const w = createWorld(level, arsenal, placements);
       runToEnd(w);
       runs++;
       turrets = placements.length;

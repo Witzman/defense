@@ -54,9 +54,18 @@ const SIZE_COST: Record<NodeSize, number> = { start: 0, small: 1, notable: 3, ke
 const UNLOCK_COST = 60;
 const UNLOCK_GROWTH = 4;
 
-const CLUSTER_RADIUS = 30;
+/** Drawn radius of a node in tree units (ui/treeView.ts); keystones and the start get an outer ring at 1.35×. */
+export const NODE_RADIUS: Record<NodeSize, number> = { start: 1.5, entry: 1.1, keystone: 1.25, notable: 0.75, synergy: 0.85, small: 0.38 };
+
+const CLUSTER_RADIUS = 40;
 const ENTRY_RADIUS = 6;
-const GLOBAL_RADIUS = 18;
+/** Global clusters sit in every other gap between turret spokes, far enough out that their rings clear the spokes (#23). */
+const GLOBAL_RADIUS = 26;
+/** Distance between the rings of a global cluster. */
+const RING_STEP = 1.9;
+const ABILITY_RADIUS = 18;
+/** Distance between two steps of an ability line. */
+const ABILITY_STEP = 1.45;
 const STEP = 2.3;
 
 interface Draft extends Omit<ResearchNode, "cost"> {
@@ -155,11 +164,14 @@ export function buildTree(): ResearchNode[] {
     link(ROOT, hubId);
     const rings = [6, 12, 16];
     let inner: string[] = [hubId];
+    // Rings count from the outward side, half a step off it: every ring then leaves a gap towards the start, so the
+    // line from the start to the hub crosses none of them, and the keystone (index 0) faces outward (#23).
     rings.forEach((count, r) => {
       const ring: string[] = [];
       for (let i = 0; i < count; i++) {
-        const ang = (2 * Math.PI * i) / count + r * 0.3;
+        const ang = a + (Math.PI / count) * (2 * i + 1);
         const notable = (i + r) % 5 === 4;
+        // The keystone sits a little further out: its outer ring needs the room.
         const keystone = r === rings.length - 1 && i === 0;
         const id = `g-${g.id}-${r + 1}-${i + 1}`;
         add({
@@ -169,12 +181,12 @@ export function buildTree(): ResearchNode[] {
           effects: keystone ? g.keystone() : notable ? g.notable() : g.small(),
           size: keystone ? "keystone" : notable ? "notable" : "small",
           cluster: g.id,
-          x: cx + Math.cos(ang) * (r + 1) * 1.5,
-          y: cy + Math.sin(ang) * (r + 1) * 1.5,
+          x: cx + Math.cos(ang) * ((r + 1) * RING_STEP + (keystone ? 1.2 : 0)),
+          y: cy + Math.sin(ang) * ((r + 1) * RING_STEP + (keystone ? 1.2 : 0)),
         });
         ring.push(id);
       }
-      // Each ring is a loop; every node of it hangs on the nearest node of the ring inside.
+      // Each ring is a loop; every node of it hangs on the node at the same place around the ring inside.
       ring.forEach((id, i) => {
         link(id, ring[(i + 1) % ring.length]!);
         const parent = inner[Math.floor((i / ring.length) * inner.length)]!;
@@ -186,8 +198,8 @@ export function buildTree(): ResearchNode[] {
 
   function abilityCluster(angle: number) {
     const a = rad(angle);
-    const cx = Math.cos(a) * GLOBAL_RADIUS;
-    const cy = Math.sin(a) * GLOBAL_RADIUS;
+    const cx = Math.cos(a) * ABILITY_RADIUS;
+    const cy = Math.sin(a) * ABILITY_RADIUS;
     add({ id: "ability", name: "Präzisionsschuss", links: [], effects: [{ kind: "abilityUnlock" }], size: "notable", cluster: "ability", x: cx, y: cy });
     link(ROOT, "ability");
     const lines: { id: string; name: string; small: Effect; notable: Effect }[] = [
@@ -201,7 +213,7 @@ export function buildTree(): ResearchNode[] {
       for (let s = 1; s <= 10; s++) {
         const notable = s % 5 === 0;
         const id = `ability-${l.id}-${s}`;
-        add({ id, name: `Präzisionsschuss: ${l.name} ${s}`, links: [], effects: [notable ? l.notable : l.small], size: notable ? "notable" : "small", cluster: "ability", x: cx + Math.cos(off) * (2 + s), y: cy + Math.sin(off) * (2 + s) });
+        add({ id, name: `Präzisionsschuss: ${l.name} ${s}`, links: [], effects: [notable ? l.notable : l.small], size: notable ? "notable" : "small", cluster: "ability", x: cx + Math.cos(off) * (2 + s * ABILITY_STEP), y: cy + Math.sin(off) * (2 + s * ABILITY_STEP) });
         link(last, id);
         last = id;
       }

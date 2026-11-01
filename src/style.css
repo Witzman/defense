@@ -79,6 +79,11 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
 /* Turret tools (#15): a column on the right edge, big enough for a finger. */
 #tools { position: fixed; right: calc(12px + env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 #turret-tools { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 22px; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+/* Run tools (#33): speed and pause, only during a run. A lit button is a state away from the default. */
+#run-tools { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 22px; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+#tools #speed { font-size: 16px; font-variant-numeric: tabular-nums; }
+#tools #pause { font-size: 16px; }
+#tools #run-tools button.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 12px rgba(126, 224, 210, 0.3); }
 #tools-label { font-size: 11px; color: var(--muted); text-align: center; }
 #tools button { min-width: 48px; min-height: 48px; padding: 4px; font-size: 20px; background: var(--panel); border-color: var(--edge); }
 #tools > button { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }

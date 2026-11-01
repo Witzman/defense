@@ -21,7 +21,15 @@ export interface TurretStats {
   shotsPerSecond: number;
   /** Degrees per second the turret swivels. */
   turnRate: number;
+  /**
+   * Width in degrees of the wedge the turret can cover around its facing (#41). Starts at START_ARC and grows with
+   * research up to MAX_ARC; the player only sets the facing. Missing = all round (hand-built arsenals in tests).
+   */
+  arc?: number;
 }
+
+export const START_ARC = 20;
+export const MAX_ARC = 180;
 
 export interface TurretType {
   id: TurretKind;

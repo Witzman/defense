@@ -65,7 +65,7 @@ export class Trail {
 
 export interface Overlay {
   /** The turret the player is about to place, or the one under the cursor. */
-  hover?: { placement: Placement; valid: boolean; range: number; existing: boolean };
+  hover?: { placement: Placement; valid: boolean; range: number; arc?: number; existing: boolean };
   /** Show every turret's swivel arc (preparation). */
   arcs?: boolean;
   /** Recent fire; without it only this tick's shots show. */
@@ -125,7 +125,7 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
   scene.fluid.draw(g, w, view, alpha);
 
   // Range of every turret while preparing, then the turrets themselves.
-  if (overlay.arcs) for (const t of w.turrets) drawArc(g, ...at(t.x, t.y), t.placement, t.stats.range * s, t.kind);
+  if (overlay.arcs) for (const t of w.turrets) drawArc(g, ...at(t.x, t.y), t.placement, t.stats.range * s, t.kind, t.stats.arc ?? 360);
   for (const t of w.turrets) drawTurret(g, ...at(t.x, t.y), s, t.kind, t.aim, 1, dpr);
 
   // Fire with afterglow: older ticks fainter.
@@ -137,13 +137,13 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
   g.globalAlpha = 1;
 
   if (overlay.hover) {
-    const { placement: p, valid, range, existing } = overlay.hover;
+    const { placement: p, valid, range, arc, existing } = overlay.hover;
     const [cx, cy] = at(p.x + 0.5, p.y + 0.5);
     if (!valid) {
       g.fillStyle = SIGNAL.invalid;
       disc(g, cx, cy, turretUnit(s, overlay.dpr ?? 1) * 0.5);
     } else {
-      drawArc(g, cx, cy, p, range * s, p.kind, 2);
+      drawArc(g, cx, cy, p, range * s, p.kind, arc ?? 360, 2);
       if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6, overlay.dpr ?? 1);
     }
   }
@@ -340,8 +340,8 @@ function sparks(g: CanvasRenderingContext2D, x: number, y: number, s: number, ag
 }
 
 /** Range and swivel arc of a placement: a full disc or a wedge around its facing, with a dotted edge. */
-function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement, r: number, kind: TurretKind, emphasis = 1) {
-  const arc = ((p.arc ?? 360) * Math.PI) / 180;
+function drawArc(g: CanvasRenderingContext2D, x: number, y: number, p: Placement, r: number, kind: TurretKind, arcDegrees: number, emphasis = 1) {
+  const arc = (arcDegrees * Math.PI) / 180;
   const facing = ((p.facing ?? 0) * Math.PI) / 180;
   g.beginPath();
   if (arc >= 2 * Math.PI - 1e-6) g.arc(x, y, r, 0, 2 * Math.PI);

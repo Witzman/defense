@@ -95,7 +95,6 @@ button.ghost { background: var(--tile); color: var(--text); font-weight: 400; bo
 #tools-label { font-size: 11px; color: var(--muted); text-align: center; }
 #tools button { min-width: 48px; min-height: 48px; padding: 4px; font-size: 20px; background: var(--panel); border-color: var(--edge); }
 #tools > button { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-#tools #arc { font-size: 14px; font-variant-numeric: tabular-nums; }
 /* Narrow screens (iPad portrait, split view): tighter HUD and bar. */
 @media (max-width: 900px) {
   #hud { gap: 12px; padding: 6px 14px; font-size: 14px; }

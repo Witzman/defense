@@ -290,6 +290,7 @@ export function describe(e: Effect): string {
     case "fireRate": return `${name}: Feuerrate ${pct(e.mul)}`;
     case "range": return `${name}: Reichweite +${e.add}`;
     case "damage": return `${name}: Schaden ${pct(e.mul)}`;
+    case "arc": return `${name}: Schwenkbereich +${e.add}°`;
     case "turnRate": return `${name}: Schwenken ${pct(e.mul)}`;
     case "pattern": return `${name}: ${PATTERN_FIELDS[e.field]} +${e.add}`;
     case "abilityUnlock": return "Präzisionsschuss: Klick im Run trifft eine kleine Fläche";

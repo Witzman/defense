@@ -2,7 +2,7 @@
  * Research: the only way to get turrets and make them stronger (#2). The catalog is the tree in
  * content/tree.ts; this module decides what can be bought and what the bought nodes add up to.
  */
-import { turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { MAX_ARC, START_ARC, turretType, type Pattern, type TurretKind, type TurretStats } from "../content/turrets.ts";
 import { BALANCE } from "../content/balance.ts";
 import { ROOT, TREE, type Effect, type PatternField, type ResearchNode } from "../content/tree.ts";
 import type { Ability, Arsenal } from "../sim/world.ts";
@@ -56,7 +56,7 @@ interface KindState {
   unlocked: boolean;
   capacity: number;
   /** Sum of (mul − 1) per multiplied value: bonuses add up (#19), so ten +20 % nodes give +200 %, not ×6.2. */
-  bonus: Record<"capacity" | "fireRate" | "damage" | "turnRate", number>;
+  bonus: Record<"capacity" | "fireRate" | "damage" | "turnRate" | "arc", number>;
   stats: TurretStats;
   pattern: Pattern;
 }
@@ -68,7 +68,7 @@ export function deriveArsenal(research: readonly string[], catalog: readonly Res
   const kind = (k: TurretKind) => {
     if (!kinds.has(k)) {
       const t = turretType(k);
-      kinds.set(k, { unlocked: false, capacity: 0, bonus: { capacity: 0, fireRate: 0, damage: 0, turnRate: 0 }, stats: { ...t.base }, pattern: { ...t.pattern } });
+      kinds.set(k, { unlocked: false, capacity: 0, bonus: { capacity: 0, fireRate: 0, damage: 0, turnRate: 0, arc: 0 }, stats: { ...t.base }, pattern: { ...t.pattern } });
     }
     return kinds.get(k)!;
   };
@@ -85,6 +85,7 @@ export function deriveArsenal(research: readonly string[], catalog: readonly Res
       case "range": kind(e.turret).stats.range += e.add; break;
       case "damage": kind(e.turret).bonus.damage += e.mul - 1; break;
       case "turnRate": kind(e.turret).bonus.turnRate += e.mul - 1; break;
+      case "arc": kind(e.turret).bonus.arc += e.add; break;
       case "pattern": addToPattern(kind(e.turret).pattern, e.field, e.add); break;
       case "abilityDamage": abilityBonus.damage += e.mul - 1; break;
       case "abilityRadius": if (ability) ability.radius += e.add; break;
@@ -99,7 +100,7 @@ export function deriveArsenal(research: readonly string[], catalog: readonly Res
   const turrets: Arsenal["turrets"] = {};
   for (const [k, v] of kinds) {
     if (!v.unlocked) continue;
-    const stats = { ...v.stats, shotsPerSecond: v.stats.shotsPerSecond * factor(v.bonus.fireRate), damage: v.stats.damage * factor(v.bonus.damage), turnRate: v.stats.turnRate * factor(v.bonus.turnRate) };
+    const stats = { ...v.stats, shotsPerSecond: v.stats.shotsPerSecond * factor(v.bonus.fireRate), damage: v.stats.damage * factor(v.bonus.damage), turnRate: v.stats.turnRate * factor(v.bonus.turnRate), arc: Math.min(MAX_ARC, START_ARC + v.bonus.arc) };
     turrets[k] = { capacity: Math.floor(v.capacity * factor(v.bonus.capacity)), stats, pattern: v.pattern };
   }
   return ability ? { turrets, ability } : { turrets };

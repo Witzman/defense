@@ -63,32 +63,59 @@ export function placeGreedy(level: LevelDef, arsenal: Arsenal, flow: Float64Arra
   for (let i = 0; i < flow.length; i++) if (flow[i]! > 0) hot.push(i);
   hot.sort((a, b) => flow[b]! - flow[a]!);
   hot.length = Math.min(hot.length, 1500);
+  // The wedge a turret covers is narrow at the start (#41): each candidate also picks its best facing, in 15° steps.
+  const BINS = 24;
   for (const kind of order) {
     const a = arsenal.turrets[kind];
     if (!a) continue;
     const r = a.stats.range;
+    const wedge = a.stats.arc ?? 360;
+    const span = Math.max(1, Math.min(BINS, Math.round(wedge / (360 / BINS))));
     for (let n = 0; n < a.capacity; n++) {
       let best: Placement | undefined;
       let bestScore = 0;
       for (const p of shore) {
-        const cand = { ...p, kind };
-        if (!canPlace(level, arsenal, placed, cand)) continue;
-        let score = 0;
-        for (const i of hot) {
-          const x = i % map.width;
-          const y = (i - x) / map.width;
-          if ((x - p.x) ** 2 + (y - p.y) ** 2 <= r * r) score += flow[i]! / 2 ** cover[i]!;
-        }
-        if (score > bestScore) [best, bestScore] = [cand, score];
+        if (!canPlace(level, arsenal, placed, { ...p, kind })) continue;
+        const { facing, score } = bestFacing(p, hot, flow, cover, map.width, r, BINS, span);
+        if (score > bestScore) [best, bestScore] = [{ ...p, kind, facing }, score];
       }
       if (!best) break;
       placed.push(best);
       for (const i of hot) {
         const x = i % map.width;
         const y = (i - x) / map.width;
-        if ((x - best.x) ** 2 + (y - best.y) ** 2 <= r * r) cover[i]!++;
+        if ((x - best.x) ** 2 + (y - best.y) ** 2 <= r * r && inWedge(best.x, best.y, x, y, best.facing ?? 0, wedge)) cover[i]!++;
       }
     }
   }
   return placed;
+}
+
+function inWedge(px: number, py: number, x: number, y: number, facing: number, wedge: number): boolean {
+  if (wedge >= 360) return true;
+  let d = (Math.atan2(y - py, x - px) * 180) / Math.PI - facing;
+  d = ((((d + 180) % 360) + 360) % 360) - 180;
+  return Math.abs(d) <= wedge / 2;
+}
+
+/** The facing (degrees, multiple of 360/bins) whose wedge of `span` bins reaches the most uncovered flow. */
+function bestFacing(p: Point, hot: number[], flow: Float64Array, cover: Float64Array, width: number, r: number, bins: number, span: number) {
+  const perBin = new Float64Array(bins);
+  for (const i of hot) {
+    const x = i % width;
+    const y = (i - x) / width;
+    if ((x - p.x) ** 2 + (y - p.y) ** 2 > r * r) continue;
+    const a = (((Math.atan2(y - p.y, x - p.x) * 180) / Math.PI + 360) % 360) / (360 / bins);
+    perBin[Math.floor(a) % bins]! += flow[i]! / 2 ** cover[i]!;
+  }
+  if (span >= bins) return { facing: 0, score: perBin.reduce((s, v) => s + v, 0) };
+  let best = 0;
+  let bestScore = -1;
+  for (let c = 0; c < bins; c++) {
+    // A wedge of `span` bins centred on bin c (centre of the bin = c + 0.5).
+    let sum = 0;
+    for (let k = 0; k < span; k++) sum += perBin[(c - Math.floor(span / 2) + k + bins * 2) % bins]!;
+    if (sum > bestScore) [best, bestScore] = [c, sum];
+  }
+  return { facing: (best + 0.5) * (360 / bins), score: Math.max(0, bestScore) };
 }

@@ -115,7 +115,7 @@ describe("weapon patterns", () => {
 describe("swivel arc", () => {
   it("ignores enemies outside its arc", () => {
     // Facing up (away from the water), a 90° arc never sees row 4.
-    const w = createWorld(level("green", 5), armed("cannon", { range: 30 }), [{ x: 10, y: 0, kind: "cannon", facing: -90, arc: 90 }], 1);
+    const w = createWorld(level("green", 5), armed("cannon", { range: 30, arc: 90 }), [{ x: 10, y: 0, kind: "cannon", facing: -90 }], 1);
     runToEnd(w);
     expect(w.killed).toBe(0);
   });

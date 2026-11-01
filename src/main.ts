@@ -34,7 +34,6 @@ let selected: TurretKind | undefined;
 let draft = { facing: 0, arc: 360 };
 let world: World;
 let phase: "prepare" | "run" | "over" = "prepare";
-let attempt = 0;
 let cursor: Point | undefined;
 let view: View;
 let fitted: View;
@@ -61,7 +60,7 @@ function commit(next: Save) {
 const unlockedKinds = () => TURRET_TYPES.map((t) => t.id).filter((k) => arsenal.turrets[k]);
 
 function rebuildWorld() {
-  world = createWorld(level, arsenal, placements, attempt + 1);
+  world = createWorld(level, arsenal, placements);
 }
 
 function openLevel(i: number) {
@@ -71,7 +70,6 @@ function openLevel(i: number) {
   // Keep only placements that still fit the map and the research.
   placements = [];
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
-  attempt = 0;
   picked = undefined;
   scene = createScene(level.map);
   renderPalette(); // its rows decide how much room the map gets
@@ -111,8 +109,7 @@ function prepare() {
 
 startButton.addEventListener("click", () => {
   if (phase === "prepare") {
-    attempt++;
-    world = createWorld(level, arsenal, placements, attempt);
+    world = createWorld(level, arsenal, placements);
     phase = "run";
     startButton.disabled = true;
     closePanels();

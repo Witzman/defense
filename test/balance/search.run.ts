@@ -50,15 +50,27 @@ async function pool(jobs: Job[]): Promise<JobResult[]> {
 
 interface State {
   levelHp: Record<number, number>;
+  levelKillValue: Record<number, number>;
   /** Per level: factor, failures per profile, diagnostics of the generalist. */
-  levels: Record<number, { factor: number; failures: Partial<Record<Profile, number>>; inCorridor: boolean; diag?: unknown }>;
+  levels: Record<number, { factor: number; killValue: number; failures: Partial<Record<Profile, number>>; inCorridor: boolean; diag?: unknown }>;
+}
+
+/** Van der Corput sequence in `base`: points that spread evenly over 0..1. */
+function halton(n: number, base: number): number {
+  let f = 1;
+  let r = 0;
+  for (let i = n; i > 0; i = Math.floor(i / base)) {
+    f /= base;
+    r += f * (i % base);
+  }
+  return r;
 }
 
 const score = (rs: JobResult[]) => rs.reduce((s, r) => s + miss(r.profile, r.failures, r.won), 0);
 
 it("balancing search", async () => {
   mkdirSync("balance/presets", { recursive: true });
-  const state: State = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { levelHp: {}, levels: {} };
+  const state: State = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { levelHp: {}, levelKillValue: {}, levels: {} };
   const presets = new Map<Profile, Save>();
   const loadPreset = (level: number, p: Profile) => {
     const f = `balance/presets/L${level + 1}-${p}.json`;
@@ -66,62 +78,73 @@ it("balancing search", async () => {
   };
   for (const p of CORRIDOR_PROFILES) presets.set(p, (FROM === 0 ? emptySave() : loadPreset(FROM, p))!);
   for (const [k, v] of Object.entries(state.levelHp)) BALANCE.levelHp[Number(k)] = v;
+  for (const [k, v] of Object.entries(state.levelKillValue)) BALANCE.levelKillValue[Number(k)] = v;
 
   for (let level = FROM; level < TO; level++) {
     for (const p of CORRIDOR_PROFILES) writeFileSync(`balance/presets/L${level + 1}-${p}.json`, JSON.stringify(presets.get(p)));
     const t0 = performance.now();
-    let lo = Math.log(0.02);
-    let hi = Math.log(50);
-    let best: { factor: number; results: JobResult[]; score: number } | undefined;
+    // Settled in an earlier run: replay it once with the stored numbers, which hands on the presets.
+    if (state.levels[level]) {
+      const rs = await pool(CORRIDOR_PROFILES.map((profile) => ({ level, profile, save: presets.get(profile)!, cap: 60, overrides: { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } } })));
+      for (const r of rs) if (r.after) presets.set(r.profile, r.after);
+      for (const p of CORRIDOR_PROFILES) writeFileSync(`balance/presets/L${level + 2}-${p}.json`, JSON.stringify(presets.get(p)));
+      process.stdout.write(`L${level + 1} kept ${JSON.stringify(state.levels[level]!.failures)}\n`);
+      continue;
+    }
+    // Two knobs per level, searched in log space: hit points of the level and points per kill. Each round samples
+    // VARIANTS points of a box (Halton sequence, so they spread evenly) and the next box closes in on the best one.
+    let box = { hp: [Math.log(0.05), Math.log(20)], kv: [Math.log(0.1), Math.log(10)] } as Record<"hp" | "kv", [number, number]>;
+    type Best = { hp: number; kv: number; results: JobResult[]; score: number };
+    let best: Best | undefined;
+    const genFail = (r: JobResult[]) => r.find((q) => q.profile === "generalist")!.failures;
+    const dist = (x: Best) => Math.abs(genFail(x.results) - CORRIDOR.generalist.target);
     for (let round = 0; round < ROUNDS; round++) {
-      const factors = Array.from({ length: VARIANTS }, (_, k) => Math.exp(lo + ((hi - lo) * k) / (VARIANTS - 1)));
-      const jobs: Job[] = factors.flatMap((factor) =>
-        CORRIDOR_PROFILES.map((profile) => ({ level, profile, save: presets.get(profile)!, overrides: { levelHp: { ...BALANCE.levelHp, [level]: factor } } })),
+      const points = Array.from({ length: VARIANTS }, (_, k) => ({
+        hp: Math.exp(box.hp[0] + (box.hp[1] - box.hp[0]) * halton(k + 1 + round * VARIANTS, 2)),
+        kv: Math.exp(box.kv[0] + (box.kv[1] - box.kv[0]) * halton(k + 1 + round * VARIANTS, 3)),
+      }));
+      // The current best stays in the field, so a round never loses ground.
+      if (best) points[0] = { hp: best.hp, kv: best.kv };
+      const jobs: Job[] = points.flatMap((pt) =>
+        CORRIDOR_PROFILES.map((profile) => ({
+          level, profile, save: presets.get(profile)!,
+          overrides: { levelHp: { ...BALANCE.levelHp, [level]: pt.hp }, levelKillValue: { ...BALANCE.levelKillValue, [level]: pt.kv } },
+        })),
       );
       const results = await pool(jobs);
-      const scored = factors.map((factor, k) => {
+      const scored: Best[] = points.map((pt, k) => {
         const rs = results.slice(k * CORRIDOR_PROFILES.length, (k + 1) * CORRIDOR_PROFILES.length);
-        return { factor, results: rs, score: score(rs) };
+        return { ...pt, results: rs, score: score(rs) };
       });
-      // Best: inside the corridor first (generalist nearest 10), else the least miss.
-      const gen = (s: (typeof scored)[number]) => Math.abs(s.results.find((r) => r.profile === "generalist")!.failures - CORRIDOR.generalist.target);
-      scored.sort((a, b) => a.score - b.score || gen(a) - gen(b));
-      if (!best || scored[0]!.score < best.score || (scored[0]!.score === best.score && gen(scored[0]!) < gen(best))) best = scored[0]!;
-      process.stdout.write(`L${level + 1} round ${round + 1}: best ×${scored[0]!.factor.toFixed(3)} miss ${scored[0]!.score.toFixed(1)} [${scored[0]!.results.map((r) => `${r.profile[0]}${r.failures}${r.won ? "" : "!"}`).join(" ")}]\n`);
-      if (best.score === 0 && gen(best) <= 1) break;
-      // Narrow to the edge: the generalist's failures rise with the factor; look between the last factor below the
-      // target and the first at or above it (stuck counts as above). If all lie on one side, move the window there.
-      const byFactor = scored.slice().sort((x, y) => x.factor - y.factor);
-      const genOf = (s: (typeof scored)[number]) => {
-        const r = s.results.find((q) => q.profile === "generalist")!;
-        return r.won ? r.failures : Infinity;
-      };
-      const above = byFactor.findIndex((s) => genOf(s) >= CORRIDOR.generalist.target);
-      const a = above < 0 ? VARIANTS - 1 : above === 0 ? 0 : above - 1;
-      const b = above < 0 ? VARIANTS - 1 : above;
-      const spread = hi - lo;
-      if (above < 0) {
-        lo = Math.log(byFactor[VARIANTS - 1]!.factor);
-        hi = lo + spread;
-      } else if (above === 0) {
-        hi = Math.log(byFactor[0]!.factor);
-        lo = hi - spread;
-      } else {
-        lo = Math.log(byFactor[a]!.factor);
-        hi = Math.log(byFactor[b]!.factor);
+      scored.sort((x, y) => x.score - y.score || dist(x) - dist(y));
+      if (!best || scored[0]!.score < best.score || (scored[0]!.score === best.score && dist(scored[0]!) < dist(best))) best = scored[0]!;
+      process.stdout.write(`L${level + 1} round ${round + 1}: hp ×${best.hp.toFixed(3)} kv ×${best.kv.toFixed(3)} miss ${best.score.toFixed(1)} [${best.results.map((r) => `${r.profile[0]}${r.failures}${r.won ? "" : "!"}`).join(" ")}]\n`);
+      if (best.score === 0 && dist(best) <= 1) break;
+      // Close in: half the width of the box around the best, but never past the first box.
+      for (const key of ["hp", "kv"] as const) {
+        const half = (box[key][1] - box[key][0]) / 4;
+        const c = Math.log(best[key]);
+        box[key] = [c - half, c + half];
       }
-      if (hi - lo < 1e-3) break;
     }
-    BALANCE.levelHp[level] = best!.factor;
-    state.levelHp[level] = Number(best!.factor.toPrecision(4));
+    BALANCE.levelHp[level] = best!.hp;
+    BALANCE.levelKillValue[level] = best!.kv;
+    state.levelHp[level] = Number(best!.hp.toPrecision(4));
+    state.levelKillValue[level] = Number(best!.kv.toPrecision(4));
     const failures: Partial<Record<Profile, number>> = {};
     for (const r of best!.results) failures[r.profile] = r.failures;
     // Presets for the next level: the saves the profiles bring out of this one; a profile that did not win keeps its
     // old save (and is marked as a miss), so the next level still has something to start from.
-    for (const r of best!.results) if (r.after) presets.set(r.profile, r.after);
-    const diag = await runInProcess({ level, profile: "generalist", save: loadPreset(level, "generalist")!, overrides: { levelHp: { ...BALANCE.levelHp } }, cap: 1, diag: true });
-    state.levels[level] = { factor: state.levelHp[level]!, failures, inCorridor: best!.score === 0, diag: diag.diag };
+    // A profile cut short by its early-abort cap has not won, so it has no save to hand on: play it on to the win.
+    const overrides = { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } };
+    const done = await pool(
+      best!.results.filter((r) => !r.after).map((r) => ({ level, profile: r.profile, save: presets.get(r.profile)!, overrides, cap: 60 })),
+    );
+    for (const r of [...best!.results, ...done]) if (r.after) presets.set(r.profile, r.after);
+    const diag = await runInProcess({ level, profile: "generalist", save: loadPreset(level, "generalist")!, overrides: { levelHp: { ...BALANCE.levelHp }, levelKillValue: { ...BALANCE.levelKillValue } }, cap: 1, diag: true });
+    state.levels[level] = { factor: state.levelHp[level]!, killValue: state.levelKillValue[level]!, failures, inCorridor: best!.score === 0, diag: diag.diag };
     writeFileSync(STATE, JSON.stringify(state, null, 1));
-    process.stdout.write(`L${level + 1} done ×${state.levelHp[level]} in ${Math.round((performance.now() - t0) / 1000)} s ${best!.score === 0 ? "IN" : "OUT"} ${JSON.stringify(failures)}\n`);
+    for (const p of CORRIDOR_PROFILES) writeFileSync(`balance/presets/L${level + 2}-${p}.json`, JSON.stringify(presets.get(p)));
+    process.stdout.write(`L${level + 1} done hp ×${state.levelHp[level]} kv ×${state.levelKillValue[level]} in ${Math.round((performance.now() - t0) / 1000)} s ${best!.score === 0 ? "IN" : "OUT"} ${JSON.stringify(failures)}\n`);
   }
 }, 86_400_000);

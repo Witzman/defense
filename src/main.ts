@@ -13,6 +13,7 @@ import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, t
 import { analyse } from "./game/stats.ts";
 import { renderAnalysis, summaryHtml } from "./ui/analysis.ts";
 import { createEnemyCard } from "./ui/enemyCard.ts";
+import { createPreview } from "./ui/preview.ts";
 import { createScene, drawWorld, fitView, screenToCell, zoomAt, Trail, type Scene, type View } from "./render/canvas.ts";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
@@ -44,6 +45,7 @@ let fitted: View;
 let scene: Scene;
 const trail = new Trail();
 const enemyCard = createEnemyCard();
+const preview = createPreview(enemyCard, () => unlockedKinds());
 
 const saver = createSaver((state) => {
   const el = $("save-state");
@@ -77,6 +79,7 @@ function openLevel(i: number) {
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
   picked = undefined;
   scene = createScene(level.map, i);
+  preview.open(level);
   renderPalette();
   fit();
   $("level").textContent = String(i + 1);
@@ -635,6 +638,7 @@ function frame(now: number) {
   } else if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
     hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
+  preview.place(view, dpr(), phase !== "run");
   drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, fxTime, { hover, arcs: phase === "prepare", trail, dpr: dpr() });
   requestAnimationFrame(frame);
 }

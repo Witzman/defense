@@ -27,6 +27,12 @@ export const BALANCE = {
    */
   cohesion: 0.8,
   /**
+   * Passing (#45): where a heavier type (enemyWeight) is in the cell of a lighter blob or the cell it steps into, the lighter one loses
+   * this share of its pace; it prefers a free downhill cell without the heavier one, so it flows past sideways. If no
+   * such cell is free it waits behind. Never a standstill. 0 = types ignore each other, exactly as before.
+   */
+  passPenalty: 0.3,
+  /**
    * Avoiding danger (#39): extra cost of a cell at full danger, times the type's dangerAvoidance and the level's
    * learning. Learning grows from 0 at level `dangerLearnFrom` to 1 at `dangerLearnTo` (level numbers from 1).
    */

@@ -50,6 +50,15 @@ export const ENEMY_TYPES: readonly EnemyType[] = [
   { id: "rock", name: "Fels", color: "#9aa5b1", edge: "#5f6b78", hp: 2.5, shield: 0, speed: 0.6, resist: { explosive: 0.5, kinetic: 0.3 }, instantKillImmune: true, depthPreference: 4, dangerAvoidance: 0.25 },
 ];
 
+/**
+ * Weight of a type (#45): (hp + shield) / speed, the heavier and slower the more. In a mixed crowd the heavier type
+ * has priority and the lighter one gives way (sim/world.ts, BALANCE.passPenalty). Green 1, Glut 1.2, Schildträger 3.3,
+ * Panzer 2.4, Fels 4.2, Schwarm 0.3.
+ */
+export function enemyWeight(t: EnemyType): number {
+  return (t.hp + t.shield) / t.speed;
+}
+
 export function enemyType(id: string): EnemyType {
   const t = ENEMY_TYPES.find((e) => e.id === id);
   if (!t) throw new Error(`unknown enemy type ${id}`);

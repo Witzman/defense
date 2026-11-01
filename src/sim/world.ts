@@ -1,7 +1,7 @@
 import { cellAt, LAND, type GameMap, type Point } from "./map.ts";
 import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
-import { enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
+import { enemyType, enemyWeight, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
 import { turretType, type Combo, type Pattern, type ProcKind, type TurretKind, type TurretStats } from "../content/turrets.ts";
 import { BALANCE } from "../content/balance.ts";
 import { countArrived, createStats, sampleEnergy, SAMPLE_TICKS, type Credit, type RunStats } from "./stats.ts";
@@ -194,6 +194,8 @@ export interface World {
   /** Scratch per tick (#40): mass and mass × speed of the blobs per cell, for the mean pace of a cell. */
   paceMass: Float64Array;
   paceSum: Float64Array;
+  /** Weight of the heaviest blob per cell (#45); 0 = none. */
+  maxWeight: Float32Array;
   groups: GroupState[];
   rng: Rng;
   tick: number;
@@ -268,6 +270,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     danger: new Float32Array(level.map.cells.length),
     paceMass: new Float64Array(level.map.cells.length),
     paceSum: new Float64Array(level.map.cells.length),
+    maxWeight: new Float32Array(level.map.cells.length),
     groups,
     rng: createRng(seed),
     tick: 0,
@@ -582,6 +585,16 @@ function meanPace(w: World, cx: number, cy: number, own: number): number {
   return mass > 0 ? sum / mass : own;
 }
 
+const WEIGHTS = new Map<string, number>();
+function weightOf(type: string): number {
+  let v = WEIGHTS.get(type);
+  if (v === undefined) {
+    v = enemyWeight(enemyType(type));
+    WEIGHTS.set(type, v);
+  }
+  return v;
+}
+
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [
   [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1],
 ];
@@ -598,11 +611,16 @@ function move(w: World) {
   const { paceMass, paceSum } = w;
   paceMass.fill(0);
   paceSum.fill(0);
+  // Passing (#45): the heaviest weight per cell; a lighter blob next to a heavier one gives way.
+  const pass = BALANCE.passPenalty;
+  const { maxWeight } = w;
+  if (pass > 0) maxWeight.fill(0);
   for (const e of w.enemies) {
     if (e.slowUntil < w.tick) e.speed = e.baseSpeed;
     const i = Math.floor(e.y) * map.width + Math.floor(e.x);
     paceMass[i]! += e.size;
     paceSum[i]! += e.size * e.speed;
+    if (pass > 0) maxWeight[i] = Math.max(maxWeight[i]!, weightOf(e.type));
   }
   const lane = 1 - 0.6 * stick;
   for (const e of w.enemies) {
@@ -630,6 +648,10 @@ function move(w: World) {
     let best = here;
     let tx = -1;
     let ty = -1;
+    // With a penalty: prefer a free downhill cell without a heavier blob, else take the best and wait.
+    const mine = pass > 0 ? weightOf(e.type) : 0;
+    const yields = pass > 0;
+    let blocked = false;
     for (const [dx, dy] of NEIGHBOURS) {
       const nx = cx + dx;
       const ny = cy + dy;
@@ -638,7 +660,23 @@ function move(w: World) {
       // A diagonal step needs water on both sides, or the blob cuts across an island corner (#11).
       if (dx !== 0 && dy !== 0 && (map.cells[cy * map.width + nx] === LAND || map.cells[ny * map.width + cx] === LAND)) continue;
       const d = field[ni]!;
-      if (d < best && fits(ni, e.size)) {
+      if (d < here && fits(ni, e.size) && yields) {
+        // Two passes in one: a cell with a heavier blob only counts if no clear cell is found.
+        const heavy = maxWeight[ni]! > mine;
+        if (heavy) {
+          if (tx < 0 || (blocked && d < best)) {
+            best = d;
+            tx = nx;
+            ty = ny;
+            blocked = true;
+          }
+        } else if (blocked || tx < 0 || d < best) {
+          best = d;
+          tx = nx;
+          ty = ny;
+          blocked = false;
+        }
+      } else if (!yields && d < best && fits(ni, e.size)) {
         best = d;
         tx = nx;
         ty = ny;
@@ -650,7 +688,9 @@ function move(w: World) {
       const vy = ty + 0.5 + laneY(e.id) * lane - e.y;
       const len = Math.hypot(vx, vy);
       const mean = meanPace(w, cx, cy, e.speed);
-      const pace = e.speed * (1 - stick) + mean * stick;
+      let pace = e.speed * (1 - stick) + mean * stick;
+      // Held up only where a heavier blob is in its own cell or the one it steps into; in a clear lane it keeps its pace.
+      if (yields && (blocked || maxWeight[ci]! > mine)) pace *= 1 - pass;
       const k = Math.min(1, (pace * DT) / len);
       e.x += vx * k;
       e.y += vy * k;

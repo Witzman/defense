@@ -6,6 +6,7 @@ import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
 import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
 import { nextArc, spreadArc, turnedFacing } from "./ui/turretEdit.ts";
+import { slotCount } from "./ui/controls.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -72,7 +73,7 @@ function openLevel(i: number) {
   for (const p of save.levels[i]?.placements ?? []) if (canPlace(level, arsenal, placements, p)) placements.push(p);
   picked = undefined;
   scene = createScene(level.map, i);
-  renderPalette(); // its rows decide how much room the map gets
+  renderPalette();
   fit();
   $("level").textContent = String(i + 1);
   prepare();
@@ -82,7 +83,7 @@ function openLevel(i: number) {
 function fit() {
   canvas.width = Math.round(innerWidth * dpr());
   canvas.height = Math.round(innerHeight * dpr());
-  // Room for HUD (top), bar (bottom, one or two rows) and the tool column (right; mirrored left so the lake stays centred).
+  // Room for HUD (top), bar (bottom, one row since #35) and the tool column (right; mirrored left so the lake stays centred).
   const d = dpr();
   const side = 76 * d;
   const top = ($("hud").getBoundingClientRect().bottom + 8) * d;
@@ -92,7 +93,10 @@ function fit() {
   fitted.oy += top;
   view = { ...fitted };
 }
-addEventListener("resize", () => level && fit());
+addEventListener("resize", () => {
+  paletteFade();
+  if (level) fit();
+});
 
 function prepare() {
   phase = "prepare";
@@ -306,9 +310,14 @@ addEventListener("keydown", (ev) => {
   }
 });
 
+/** The bar keeps one row (#35): the kinds scroll sideways, by finger or wheel, and fade at an edge where more follows. */
+const palette = $("palette");
+/** The kind the palette last showed as selected: only a new selection scrolls the palette. */
+let shownSelected: TurretKind | undefined;
 function renderPalette() {
   const kinds = unlockedKinds();
-  $("palette").replaceChildren(
+  const scroll = palette.scrollLeft;
+  palette.replaceChildren(
     ...kinds.map((k, i) => {
       const t = turretType(k);
       const b = document.createElement("button");
@@ -317,7 +326,7 @@ function renderPalette() {
       b.title = `${t.name} (${i + 1}) – Klick auf Land setzt, Klick auf ein Geschütz entfernt, R dreht, A ändert den Schwenkbereich`;
       b.style.setProperty("--kind", t.color);
       const used = placements.filter((p) => p.kind === k).length;
-      b.innerHTML = `<span class="symbol">${t.symbol}</span><span>${used}/${arsenal.turrets[k]!.capacity}</span>`;
+      b.innerHTML = `<span class="symbol">${t.symbol}</span><span>${slotCount(used, arsenal.turrets[k]!.capacity)}</span>`;
       b.addEventListener("click", () => {
         selected = k;
         renderPalette();
@@ -325,7 +334,33 @@ function renderPalette() {
       return b;
     }),
   );
+  palette.scrollLeft = scroll;
+  if (selected !== shownSelected) {
+    shownSelected = selected;
+    const b = palette.querySelector<HTMLElement>(".slot.selected");
+    if (b) {
+      // Into view with a slot's width to spare, so the neighbour that follows shows too.
+      const pad = 24;
+      const left = b.offsetLeft; // the palette is the slots' offset parent
+      if (left - pad < palette.scrollLeft) palette.scrollLeft = left - pad;
+      else if (left + b.offsetWidth + pad > palette.scrollLeft + palette.clientWidth)
+        palette.scrollLeft = left + b.offsetWidth + pad - palette.clientWidth;
+    }
+  }
+  paletteFade();
 }
+function paletteFade() {
+  const max = palette.scrollWidth - palette.clientWidth;
+  palette.classList.toggle("more-left", palette.scrollLeft > 1);
+  palette.classList.toggle("more-right", palette.scrollLeft < max - 1);
+}
+palette.addEventListener("scroll", paletteFade, { passive: true });
+// A mouse wheel turns into sideways scrolling; a trackpad's sideways swipe already scrolls.
+palette.addEventListener("wheel", (ev) => {
+  if (palette.scrollWidth <= palette.clientWidth || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+  ev.preventDefault();
+  palette.scrollLeft += ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaY;
+}, { passive: false });
 
 function updateHud() {
   if (!world) return;

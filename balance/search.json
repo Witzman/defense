@@ -1,26 +1,32 @@
 {
  "levelHp": {
-  "0": 0.6958,
-  "1": 0.8293,
+  "0": 0.9543,
+  "1": 0.2236,
   "2": 0.2236,
-  "3": 4.472
+  "3": 1,
+  "4": 2.115,
+  "5": 16.01,
+  "6": 1
  },
  "levelKillValue": {
-  "0": 0.5485,
-  "1": 1.238,
-  "2": 2.154,
-  "3": 0.1668
+  "0": 1.735,
+  "1": 4.101,
+  "2": 3.623,
+  "3": 1.025,
+  "4": 4.309,
+  "5": 0.8916,
+  "6": 0.4874
  },
  "levels": {
   "0": {
-   "factor": 0.6958,
-   "killValue": 0.5485,
+   "factor": 0.9543,
+   "killValue": 1.735,
    "failures": {
-    "generalist": 11,
-    "optimizer": 2,
-    "random": 0
+    "generalist": 4,
+    "optimizer": 1,
+    "random": 8
    },
-   "inCorridor": true,
+   "inCorridor": false,
    "diag": {
     "seconds": 20.3,
     "jamShare": 0,
@@ -32,27 +38,8 @@
    }
   },
   "1": {
-   "factor": 0.8293,
-   "killValue": 1.238,
-   "failures": {
-    "generalist": 3,
-    "optimizer": 0,
-    "random": 6
-   },
-   "inCorridor": false,
-   "diag": {
-    "seconds": 64.93333333333334,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.7427536231884058,
-    "pointsPerMinute": 398.25462012320327,
-    "bestEarlierPerMinute": 71.0951526032316,
-    "nodes": 2
-   }
-  },
-  "2": {
    "factor": 0.2236,
-   "killValue": 2.154,
+   "killValue": 4.101,
    "failures": {
     "generalist": 0,
     "optimizer": 0,
@@ -60,32 +47,108 @@
    },
    "inCorridor": false,
    "diag": {
-    "seconds": 81,
+    "seconds": 76.63333333333333,
     "jamShare": 0,
     "deepReach": 1,
-    "waterShare": 0.49321266968325794,
-    "pointsPerMinute": 3482.9629629629626,
-    "bestEarlierPerMinute": 568.0879120879121,
-    "nodes": 12
+    "waterShare": 0.7427536231884058,
+    "pointsPerMinute": 1862.635928664637,
+    "bestEarlierPerMinute": 224.19354838709677,
+    "nodes": 2
    }
   },
-  "3": {
-   "factor": 4.472,
-   "killValue": 0.1668,
+  "2": {
+   "factor": 0.2236,
+   "killValue": 3.623,
    "failures": {
-    "generalist": 2,
+    "generalist": 0,
     "optimizer": 0,
-    "random": 11
+    "random": 0
    },
    "inCorridor": false,
    "diag": {
-    "seconds": 31.433333333333334,
+    "seconds": 44.2,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.49321266968325794,
+    "pointsPerMinute": 1744,
+    "bestEarlierPerMinute": 1874.8686514886167,
+    "nodes": 2
+   }
+  },
+  "3": {
+   "factor": 1,
+   "killValue": 1.025,
+   "failures": {
+    "generalist": 0,
+    "optimizer": 0,
+    "random": 0
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 92,
     "jamShare": 0,
     "deepReach": 1,
     "waterShare": 0.5281306715063521,
-    "pointsPerMinute": 7,
-    "bestEarlierPerMinute": 3964.215456674473,
-    "nodes": 27
+    "pointsPerMinute": 5461.95652173913,
+    "bestEarlierPerMinute": 6619.813953488372,
+    "nodes": 37
+   }
+  },
+  "4": {
+   "factor": 2.115,
+   "killValue": 4.309,
+   "failures": {
+    "generalist": 1,
+    "optimizer": 0,
+    "random": 4
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 49.833333333333336,
+    "jamShare": 0.29,
+    "deepReach": 1,
+    "waterShare": 0.5152529761904762,
+    "pointsPerMinute": 7082,
+    "bestEarlierPerMinute": 7041.151881096145,
+    "nodes": 92
+   }
+  },
+  "5": {
+   "factor": 16.01,
+   "killValue": 0.8916,
+   "failures": {
+    "generalist": 8,
+    "optimizer": 0,
+    "random": 0
+   },
+   "inCorridor": true,
+   "diag": {
+    "seconds": 67.23333333333333,
+    "jamShare": 0.4074074074074074,
+    "deepReach": 1,
+    "waterShare": 0.6059006211180125,
+    "pointsPerMinute": 402.47892910262766,
+    "bestEarlierPerMinute": 90389.15254237287,
+    "nodes": 151
+   }
+  },
+  "6": {
+   "factor": 1,
+   "killValue": 0.4874,
+   "failures": {
+    "generalist": 0,
+    "optimizer": 0,
+    "random": 0
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 73.3,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.6627282491944146,
+    "pointsPerMinute": 99221.00954979536,
+    "bestEarlierPerMinute": 110795.567867036,
+    "nodes": 413
    }
   }
  }

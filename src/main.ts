@@ -6,7 +6,7 @@ import { buy, canBuy, deriveArsenal } from "./game/research.ts";
 import { createTreeView } from "./ui/treeView.ts";
 import { applyMove, attachGestures, type Pt } from "./ui/gestures.ts";
 import { nextArc, spreadArc, turnedFacing } from "./ui/turretEdit.ts";
-import { slotCount } from "./ui/controls.ts";
+import { frameSteps, nextSpeed, parseSpeed, slotCount, type Speed } from "./ui/controls.ts";
 import { emptySave, recordRun, setPlacements, type Save } from "./game/save.ts";
 import type { Point } from "./sim/map.ts";
 import { canPlace, createWorld, DT, remaining, step, useAbility, type Arsenal, type LevelDef, type Placement, type World } from "./sim/world.ts";
@@ -115,6 +115,7 @@ startButton.addEventListener("click", () => {
   if (phase === "prepare") {
     world = createWorld(level, arsenal, placements);
     phase = "run";
+    paused = false;
     startButton.disabled = true;
     closePanels();
     renderTools();
@@ -206,7 +207,7 @@ attachGestures(canvas, {
   tap(p, ev, count) {
     if (phase === "run") {
       const m = toMap(p);
-      useAbility(world, m.x, m.y);
+      if (!paused) useAbility(world, m.x, m.y);
       return;
     }
     if (phase !== "prepare") return;
@@ -260,6 +261,7 @@ function toolDone(t: { facing?: number; arc?: number }) {
   renderTools();
 }
 function renderTools() {
+  renderRunTools();
   const show = phase === "prepare" && unlockedKinds().length > 0;
   $("turret-tools").hidden = !show;
   if (!show) return;
@@ -289,6 +291,11 @@ document.addEventListener("gesturestart", (ev) => ev.preventDefault());
 /** R turns the turret under the cursor (or the picked one, or the next one placed) by 45°, A narrows its swivel arc. */
 addEventListener("keydown", (ev) => {
   if (ev.key === "0" || ev.key === "Home") view = { ...fitted };
+  if (ev.key === " " && phase === "run") {
+    // Space pauses; it must not also press the button that has the focus.
+    ev.preventDefault();
+    if (!ev.repeat) togglePause();
+  }
   if (ev.key === "Escape") closePanels();
   if (phase !== "prepare") return;
   const key = ev.key.toLowerCase();
@@ -298,6 +305,7 @@ addEventListener("keydown", (ev) => {
   if (key === "r") turn(target, ev.shiftKey ? -45 : 45);
   else narrow(target);
 });
+addEventListener("keyup", (ev) => ev.key === " " && phase === "run" && ev.preventDefault());
 // Number keys pick a turret kind from the bar.
 addEventListener("keydown", (ev) => {
   const n = Number(ev.key);
@@ -372,7 +380,7 @@ function updateHud() {
   $("points").textContent = fmt.format(Math.floor(save.points));
   $("research-points").textContent = fmt.format(Math.floor(save.points));
   const ability = $("ability");
-  ability.hidden = !arsenal.ability || phase !== "run";
+  ability.hidden = !arsenal.ability || phase !== "run" || paused; // the pause hint takes its place
   if (arsenal.ability && phase === "run") {
     const wait = Math.max(0, (world.abilityReadyTick - world.tick) * DT);
     ability.textContent = wait > 0 ? `Präzisionsschuss ${wait.toFixed(1)} s` : `Präzisionsschuss bereit – ${coarse ? "Tippen" : "Klick"} ins Wasser`;
@@ -380,8 +388,10 @@ function updateHud() {
   }
   const noTurret = unlockedKinds().length === 0;
   const editing = coarse && !!pickedNow();
-  hint.hidden = !(phase === "prepare" && (noTurret || placements.length === 0 || editing));
-  hint.textContent = noTurret
+  hint.hidden = !((phase === "prepare" && (noTurret || placements.length === 0 || editing)) || (phase === "run" && paused));
+  hint.textContent = phase === "run"
+    ? `Pause – ${coarse ? "▶ tippen" : "Leertaste oder ▶"} spielt weiter`
+    : noTurret
     ? "Noch kein Geschütz – erforsche zuerst eins."
     : editing && placements.length > 0
       ? "Ziehen verschiebt · zwei Finger: spreizen = Bereich, drehen = Ausrichtung · Doppeltipp entfernt"
@@ -505,21 +515,63 @@ function renderResearch() {
  * the pace, not the balance: the simulation still steps in fixed DT. */
 const GAME_SPEED = 1.15 * 1.15;
 
+/** Run speed (#33): 1× is GAME_SPEED. The player's choice is kept across runs in the browser, not in the save game. */
+const SPEED_KEY = "flow-defense/speed";
+let speed: Speed = 1;
+try {
+  speed = parseSpeed(localStorage.getItem(SPEED_KEY));
+} catch {
+  // No storage: start at 1×.
+}
+let paused = false;
+const speedButton = $<HTMLButtonElement>("speed");
+const pauseButton = $<HTMLButtonElement>("pause");
+function renderRunTools() {
+  $("run-tools").hidden = phase !== "run";
+  speedButton.textContent = `${speed}×`;
+  speedButton.classList.toggle("on", speed === 2);
+  speedButton.title = speed === 2 ? "Doppeltes Tempo – zurück auf 1×" : "Doppeltes Tempo";
+  pauseButton.textContent = paused ? "▶" : "❚❚";
+  pauseButton.classList.toggle("on", paused);
+  pauseButton.title = paused ? "Weiter (Leertaste)" : "Pause (Leertaste)";
+  pauseButton.setAttribute("aria-label", paused ? "Weiter" : "Pause");
+  pauseButton.setAttribute("aria-pressed", String(paused));
+}
+function togglePause() {
+  if (phase !== "run") return;
+  paused = !paused;
+  renderRunTools();
+  updateHud();
+}
+speedButton.addEventListener("click", () => {
+  speed = nextSpeed(speed);
+  try {
+    localStorage.setItem(SPEED_KEY, String(speed));
+  } catch {
+    // Not kept: the speed still applies to this session.
+  }
+  renderRunTools();
+});
+pauseButton.addEventListener("click", togglePause);
+
 let last = performance.now();
 let acc = 0;
+/** Clock of time-driven effects (goal pulse, spawn rings): it stands still in a pause and runs faster at 2×. */
+let fxTime = 0;
 function frame(now: number) {
-  const elapsed = Math.min(0.25, (now - last) / 1000);
+  const elapsed = (now - last) / 1000;
   last = now;
   if (phase === "run") {
-    acc += elapsed * GAME_SPEED;
-    while (acc >= DT && world.status === "running") {
+    const r = frameSteps(acc, elapsed, GAME_SPEED * speed, paused, DT);
+    acc = r.acc;
+    for (let i = 0; i < r.steps && world.status === "running"; i++) {
       step(world);
       trail.push(world.shots);
-      acc -= DT;
     }
+    if (!paused) fxTime += Math.min(0.25, elapsed) * speed;
     updateHud();
     if (world.status !== "running") finish();
-  }
+  } else fxTime += Math.min(0.25, elapsed);
   let hover;
   if (cursor && phase === "prepare") {
     const i = placedAt(cursor);
@@ -536,7 +588,7 @@ function frame(now: number) {
   } else if (!hover && picked && phase === "prepare" && placements.includes(picked)) {
     hover = { placement: picked, valid: true, range: arsenal.turrets[picked.kind]!.stats.range, existing: true };
   }
-  drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, now / 1000, { hover, arcs: phase === "prepare", trail, dpr: dpr() });
+  drawWorld(g, view, scene, world, phase === "run" ? acc / DT : 1, fxTime, { hover, arcs: phase === "prepare", trail, dpr: dpr() });
   requestAnimationFrame(frame);
 }
 

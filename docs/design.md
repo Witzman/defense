@@ -29,17 +29,21 @@ moves or acts is light. (#16 started with a pale paper atlas; its contrast was t
 
 ## Type
 
-- **Sora** for the whole interface, self-hosted (`src/fonts/`, Latin subset, variable weight; no request to a font
-  service). Regular for text, 600 for numbers that matter and buttons; tabular figures in counters.
+- **Sora** for the whole interface, **Alegreya** (serif, regular and italic) for map lettering; both self-hosted
+  (`src/fonts/`, Latin subset, licences beside them; no request to a font service). Sora regular for text, 600 for
+  numbers that matter and buttons; tabular figures in counters.
 - **Titles** (game name, panel headings): 12–13 px, 600, uppercase, 4 px letter spacing, accent cyan.
-- Map lettering (place names, a serif) is part of #18.
+- **Map lettering** (#18, `src/render/labels.ts`): waters in Alegreya italic, cyan; islands, harbours and springs in
+  spaced Alegreya capitals, pale; each on a dark halo, at a fixed screen size so it reads at every zoom. Names are
+  picked per level from fixed lists, the same on every visit. No compass rose and no scale bar (owner).
 
 ## Shape
 
 - **Glass floats.** HUD and hints are pills (`999px`); the bar, the tool column, panels and the banner have 22 px
   corners; buttons and slots 14 px. Every glass surface has the cyan edge and, where it floats over the map, a
   backdrop blur. Large panels are opaque, so text never sits on the map.
-- **The world is round.** Coasts are smooth curves with a slight hand-drawn wobble, never cell steps. Turrets are
+- **The world is round.** Coasts are smooth curves with a slight hand-drawn wobble, never cell steps. Woodland is
+  drawn as small triangles, footpaths as dashed lines over the land, as OpenStreetMap draws them. Turrets are
   discs, spawns are rings, goals are discs with a core.
 - **The symbol of a turret is the same everywhere**: map, bar, research (#2).
 
@@ -64,7 +68,9 @@ moves or acts is light. (#16 started with a pale paper atlas; its contrast was t
 
 The look must not cost the game its frame rate (#15: iPad and desktop).
 
-- The map is drawn **once per level** into an image of at most 2.5 million pixels.
+- The map is drawn **once per level** into an image of at most 2.5 million pixels. Up close the visible part is
+  painted again at the camera's resolution (at most 1.6 million pixels, 4 ms per frame), so the map stays sharp
+  without a stutter; until that is done the sheet shows.
 - The liquid is computed per frame on the CPU over the **visible part only**, at most 200,000 pixels, then scaled
   up. No canvas `filter` (Safari lacks it), no `shadowBlur` per shot.
 - Gradients only for fresh fire; older fire is drawn as plain strokes.

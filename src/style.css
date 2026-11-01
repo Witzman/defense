@@ -1,5 +1,7 @@
 /* Design language "Fluid" (#16, docs/design.md): the map is a pale atlas sheet, the controls float above it as dark
    glass with a cyan edge. Same colours as src/render/theme.ts. */
+@font-face { font-family: Alegreya; src: url("./fonts/alegreya-latin.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: Alegreya; src: url("./fonts/alegreya-italic-latin.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
 @font-face { font-family: Sora; src: url("./fonts/sora-latin.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
 :root {
   --paper: #1e2928;

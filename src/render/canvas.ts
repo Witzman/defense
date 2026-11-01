@@ -1,9 +1,10 @@
 import type { GameMap, Point } from "../sim/map.ts";
 import type { Placement, Shot, World } from "../sim/world.ts";
 import { turretType, type TurretKind } from "../content/turrets.ts";
-import { drawTerrain, shoreField, PAPER } from "./terrain.ts";
+import { drawTerrain, sheetScale, shoreField, TerrainDetail, PAPER } from "./terrain.ts";
+import { mapLabels, type Label } from "./labels.ts";
 import { Fluid } from "./fluid.ts";
-import { GLASS, SIGNAL } from "./theme.ts";
+import { GLASS, MAP, SIGNAL } from "./theme.ts";
 
 export interface View {
   scale: number;
@@ -28,15 +29,23 @@ export function screenToCell(view: View, sx: number, sy: number): Point {
   return { x: Math.floor((sx - view.ox) / view.scale), y: Math.floor((sy - view.oy) / view.scale) };
 }
 
-/** What stays the same for a whole level: the drawn map and the liquid's buffers. */
+/** What stays the same for a whole level: the drawn map, its sharp detail, its names and the liquid's buffers. */
 export interface Scene {
   terrain: HTMLCanvasElement;
+  detail: TerrainDetail;
+  labels: Label[];
   fluid: Fluid;
 }
 
-export function createScene(map: GameMap): Scene {
+/** `seed` picks the level's names; the same level always gets the same ones. */
+export function createScene(map: GameMap, seed: number): Scene {
   const field = shoreField(map);
-  return { terrain: drawTerrain(map, field), fluid: new Fluid(field, map.width, map.height) };
+  return {
+    terrain: drawTerrain(map, field),
+    detail: new TerrainDetail(map, field, sheetScale(map)),
+    labels: mapLabels(map, field, seed),
+    fluid: new Fluid(field, map.width, map.height),
+  };
 }
 
 /** Ticks of fire kept for the afterglow: shots fade over this many ticks instead of blinking for one. */
@@ -61,6 +70,8 @@ export interface Overlay {
   arcs?: boolean;
   /** Recent fire; without it only this tick's shots show. */
   trail?: Trail;
+  /** Device pixels per CSS pixel: lettering keeps its size on screen. */
+  dpr?: number;
 }
 
 export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene, w: World, alpha: number, time: number, overlay: Overlay) {
@@ -70,7 +81,9 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
   const map = w.level.map;
   g.imageSmoothingEnabled = true;
   g.drawImage(scene.terrain, ox, oy, map.width * s, map.height * s);
+  scene.detail.draw(g, view);
   const at = (x: number, y: number) => [ox + x * s, oy + y * s] as const;
+  drawLabels(g, scene.labels, at, s, overlay.dpr ?? 1);
 
   // Spawns as springs (rings welling outward), goals as harbours that fade as their energy drains.
   // Markers keep a minimum size so they read from afar.
@@ -133,6 +146,36 @@ export function drawWorld(g: CanvasRenderingContext2D, view: View, scene: Scene,
       if (!existing) drawTurret(g, cx, cy, s, p.kind, ((p.facing ?? 0) * Math.PI) / 180, 0.6);
     }
   }
+}
+
+/**
+ * Names on the map (#18), in screen size so they stay legible at every zoom: waters in italics, islands and places in
+ * spaced capitals, each on a dark halo. Hidden while the map is too small for them to fit.
+ */
+function drawLabels(g: CanvasRenderingContext2D, labels: readonly Label[], at: (x: number, y: number) => readonly [number, number], s: number, dpr: number) {
+  if (s < 5 * dpr) return;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.lineJoin = "round";
+  g.lineWidth = 3 * dpr;
+  g.strokeStyle = MAP.labelHalo;
+  for (const l of labels) {
+    const [x, y] = at(l.x, l.y);
+    if (x < -200 || y < -50 || x > g.canvas.width + 200 || y > g.canvas.height + 50) continue;
+    if (l.kind === "water") {
+      g.font = `italic 500 ${Math.round(16 * dpr)}px Alegreya, Georgia, serif`;
+      g.letterSpacing = `${dpr}px`;
+      g.fillStyle = MAP.labelWater;
+    } else {
+      g.font = `500 ${Math.round((l.kind === "island" ? 13 : 12) * dpr)}px Alegreya, Georgia, serif`;
+      g.letterSpacing = `${2 * dpr}px`;
+      g.fillStyle = MAP.labelLand;
+    }
+    const text = l.kind === "water" ? l.text : l.text.toUpperCase();
+    g.strokeText(text, x, y);
+    g.fillText(text, x, y);
+  }
+  g.letterSpacing = "0px";
 }
 
 /**

@@ -9,12 +9,13 @@
       if (!location.pathname.endsWith("/") && !/\.[a-z0-9]+$/i.test(location.pathname))
         location.replace(location.pathname + "/" + location.search + location.hash);
     </script>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23a7d64a'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%237ee0d2'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <canvas id="game"></canvas>
     <header id="hud">
+      <span class="title">Flow Defense</span>
       <span>Level <strong id="level">1</strong></span>
       <span>Verbleibend <strong id="remaining">0</strong></span>
       <span class="energy">Ziel <span class="bar"><span id="energy-fill"></span></span> <strong id="energy">100 %</strong></span>

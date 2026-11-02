@@ -1,19 +1,11 @@
 {
  "levelHp": {
   "0": 0.8,
-  "1": 1.673,
-  "2": 4.28,
-  "3": 8.911,
-  "4": 5.161,
-  "5": 13.43,
+  "1": 1.454,
   "6": 15.75
  },
  "levelKillValue": {
-  "1": 1.068,
-  "2": 1.492,
-  "3": 1.14,
-  "4": 0.8286,
-  "5": 1.082,
+  "1": 0.7327,
   "6": 0.9362
  },
  "levels": {
@@ -24,79 +16,20 @@
    "inCorridor": false
   },
   "1": {
-   "factor": 1.673,
-   "killValue": 1.068,
+   "factor": 1.454,
+   "killValue": 0.7327,
    "failures": {
-    "generalist": 8
-   },
-   "inCorridor": true
-  },
-  "2": {
-   "factor": 4.28,
-   "killValue": 1.492,
-   "failures": {
-    "generalist": 7
+    "generalist": 10
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 95.26666666666667,
+    "seconds": 76.13333333333333,
     "jamShare": 0,
     "deepReach": 1,
-    "waterShare": 0.49321266968325794,
-    "pointsPerMinute": 2050.034989503149,
-    "bestEarlierPerMinute": 524.3294117647059,
-    "nodes": 87
-   }
-  },
-  "3": {
-   "factor": 8.911,
-   "killValue": 1.14,
-   "failures": {
-    "generalist": 5
-   },
-   "inCorridor": false,
-   "diag": {
-    "seconds": 108.3,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.5281306715063521,
-    "pointsPerMinute": 5192.24376731302,
-    "bestEarlierPerMinute": 2383.6452400325466,
-    "nodes": 142
-   }
-  },
-  "4": {
-   "factor": 5.161,
-   "killValue": 0.8286,
-   "failures": {
-    "generalist": 9
-   },
-   "inCorridor": true,
-   "diag": {
-    "seconds": 108.86666666666666,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.5152529761904762,
-    "pointsPerMinute": 14130.496019595837,
-    "bestEarlierPerMinute": 7770.4283740211895,
-    "nodes": 208
-   }
-  },
-  "5": {
-   "factor": 13.43,
-   "killValue": 1.082,
-   "failures": {
-    "generalist": 9
-   },
-   "inCorridor": true,
-   "diag": {
-    "seconds": 206.63333333333333,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.6059006211180125,
-    "pointsPerMinute": 26280.754960477498,
-    "bestEarlierPerMinute": 20929.795918367345,
-    "nodes": 329
+    "waterShare": 0.7427536231884058,
+    "pointsPerMinute": 330.2101576182137,
+    "bestEarlierPerMinute": 131.38686131386862,
+    "nodes": 7
    }
   },
   "6": {

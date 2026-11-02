@@ -108,10 +108,16 @@ export function campaignLevel(i: number): LevelDef {
     map,
     enemies: { groups, hpScale: BALANCE.hpBase * BALANCE.hpGrowth ** i * (BALANCE.levelHp[i] ?? 1), learning: learning(i), speed: ENEMY_SPEED, packet },
     goalEnergy: Math.max(1, Math.round((total * GOAL_TOLERANCE) / goals)),
-    cellCapacity: 3 * packet,
+    cellCapacity: cellPackets(i) * packet,
     // Every level has its own run, the same on every try (#28).
     runSeed: 30_000 + i * 7919,
   };
+}
+
+/** Packets one water cell of level `i` holds (BALANCE.cellPackets). */
+export function cellPackets(i: number): number {
+  const { early, late, from } = BALANCE.cellPackets;
+  return i >= from ? late : early;
 }
 
 export const LEVELS: (() => LevelDef)[] = Array.from({ length: LEVEL_COUNT }, (_, i) => () => campaignLevel(i));

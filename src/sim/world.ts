@@ -406,6 +406,7 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
     if (onShield <= e.shield) {
       e.shield -= onShield;
       w.source.damage += onShield;
+      creditCombos(w, e, type, onShield);
       return amount;
     }
     raw -= e.shield / (v * mult);
@@ -415,7 +416,26 @@ function hit(w: World, e: Enemy, amount: number, type: DamageType): number {
   // Members die as the pool drops below their share; a blob of 10 at 2 hp each loses one per 2 damage.
   killTo(w, e, Math.ceil(e.hp / e.hpEach - 1e-9));
   w.source.damage += before - e.shield - e.hp;
+  creditCombos(w, e, type, before - e.shield - e.hp);
   return amount;
+}
+
+/** Counts which status combinations a hit used and how much damage they added (#43). Only counting. */
+function creditCombos(w: World, e: Enemy, type: DamageType, dealt: number) {
+  const combos = w.arsenal.combos;
+  if (!combos || combos.length === 0 || dealt <= 0) return;
+  const used: [Combo, number][] = [];
+  if (combos.includes("shatter") && w.tick <= e.frozenUntil && (type === "kinetic" || type === "explosive")) used.push(["shatter", 1.5]);
+  if (combos.includes("conduct") && w.tick <= e.wetUntil && type === "electric") used.push(["conduct", 1.5]);
+  if (combos.includes("blaze") && e.burnDps > 0 && w.tick <= e.burnUntil && type === "explosive") used.push(["blaze", 1.3]);
+  if (used.length === 0) return;
+  const total = used.reduce((m, [, f]) => m * f, 1);
+  const extra = dealt * (1 - 1 / total);
+  for (const [c, f] of used) {
+    const row = w.stats.combos[c];
+    row.hits++;
+    row.damage += extra * (Math.log(f) / Math.log(total));
+  }
 }
 
 /** Marked blobs take more; research can switch on combinations of statuses (#42). */
@@ -948,6 +968,8 @@ function applyProcs(w: World, t: Turret, first: Enemy, shots: number) {
 const MAX_PROCS = 6;
 
 function trigger(w: World, t: Turret, proc: ProcKind, e: Enemy, power: number) {
+  const counted = w.stats.procs[t.kind] ?? (w.stats.procs[t.kind] = {});
+  counted[proc] = (counted[proc] ?? 0) + 1;
   const k = 1 + power;
   const ticks = (seconds: number) => w.tick + Math.round((seconds * k) / DT);
   switch (proc) {

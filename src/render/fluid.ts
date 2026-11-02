@@ -4,6 +4,21 @@ import { LAND_REACH, type Field } from "./terrain.ts";
 
 const RGB = new Map(ENEMY_TYPES.map((t) => [t.id, hexToRgb(t.color)] as const));
 
+const ICE: readonly [number, number, number] = [175, 232, 255];
+const FIRE: readonly [number, number, number] = [255, 122, 36];
+const WET: readonly [number, number, number] = [70, 140, 255];
+
+/** The colour of a blob with its states on it (#43): frozen ice, burning fire, wet blue. One state per blob, no cost per enemy. */
+function tint(tick: number, e: { frozenUntil: number; burnUntil: number; burnDps: number; wetUntil: number }, c: readonly [number, number, number]): readonly [number, number, number] {
+  let to: readonly [number, number, number] | undefined;
+  let k = 0;
+  if (tick <= e.frozenUntil) { to = ICE; k = 0.65; }
+  else if (e.burnDps > 0 && tick <= e.burnUntil) { to = FIRE; k = 0.55; }
+  else if (tick <= e.wetUntil) { to = WET; k = 0.35; }
+  if (!to) return c;
+  return [c[0] + (to[0] - c[0]) * k, c[1] + (to[1] - c[1]) * k, c[2] + (to[2] - c[2]) * k];
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -77,7 +92,7 @@ export class Fluid {
       const ya = Math.max(0, Math.floor(y - R));
       const yb = Math.min(rows - 1, Math.ceil(y + R));
       if (xa > xb || ya > yb) continue;
-      const [cr, cg, cb] = RGB.get(e.type)!;
+      const [cr, cg, cb] = tint(w.tick, e, RGB.get(e.type)!);
       const inv = 1 / (R * R);
       for (let py = ya; py <= yb; py++) {
         const dy = py + 0.5 - y;
@@ -118,6 +133,21 @@ export class Fluid {
     this.ctx.putImageData(this.image, 0, 0);
     g.imageSmoothingEnabled = true;
     g.drawImage(this.canvas, ox + r.x0 * s, oy + r.y0 * s, (r.x1 - r.x0) * s, (r.y1 - r.y0) * s);
+
+    // A marked blob wears a ring (#43); only these cost a stroke.
+    g.strokeStyle = "rgba(255, 224, 110, 0.9)";
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath();
+    for (const e of w.enemies) {
+      if (w.tick > e.markUntil) continue;
+      const x = e.px + (e.x - e.px) * alpha;
+      const y = e.py + (e.y - e.py) * alpha;
+      if (x < r.x0 || x > r.x1 || y < r.y0 || y > r.y1) continue;
+      const rr = s * 0.42 * Math.min(1.6, 0.8 + Math.log10(e.size + 1) * 0.3);
+      g.moveTo(ox + x * s + rr, oy + y * s);
+      g.arc(ox + x * s, oy + y * s, rr, 0, Math.PI * 2);
+    }
+    g.stroke();
 
     // Up close every blob catches the light: a small highlight, so single members stay countable.
     if (s >= HIGHLIGHT_SCALE) {

@@ -213,6 +213,8 @@ export interface World {
   /** Enemies not spawned yet. */
   toSpawn: number;
   nextId: number;
+  /** Blobs spawned so far (#44): shedding never lifts the blob count above it, so cost stays bounded. */
+  blobsSpawned: number;
   enemies: Enemy[];
   /** Enemies in the water (sum of blob sizes). */
   active: number;
@@ -286,6 +288,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     goalAt: goalIndex(level.map),
     toSpawn: groups.reduce((n, g) => n + g.left, 0),
     nextId: 0,
+    blobsSpawned: 0,
     enemies: [],
     active: 0,
     turrets: [],
@@ -311,6 +314,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
         speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0, frozenUntil: 0, wetUntil: 0, markUntil: 0, mergeAcc: 0, splitAcc: 0,
       };
       w.enemies.push(e);
+      w.blobsSpawned++;
       w.active += size;
       w.stats.spawned[type] = (w.stats.spawned[type] ?? 0) + size;
       w.density[Math.floor(y) * level.map.width + Math.floor(x)]! += size;
@@ -742,7 +746,7 @@ function fuse(w: World) {
     fuseHead[c] = i;
   }
   const shed: Enemy[] = [];
-  let gone = false;
+  let merged = 0;
   for (let i = 0; i < list.length; i++) {
     const e = list[i]!;
     if (e.size <= 0) continue;
@@ -764,19 +768,20 @@ function fuse(w: World) {
         if (e.mergeAcc >= 1) {
           e.mergeAcc = 0;
           absorb(e, list[partner]!);
-          gone = true;
+          merged++;
         }
       }
     }
     if (split > 0 && e.size >= 2) {
-      e.splitAcc += split;
-      if (e.splitAcc >= 1) {
+      e.splitAcc = Math.min(1, e.splitAcc + split);
+      // Only while there is room under the blob count of the spawn, so the cost of a step never grows (#44).
+      if (e.splitAcc >= 1 && list.length - merged + shed.length < w.blobsSpawned) {
         e.splitAcc = 0;
         shed.push(shedFrom(w, e));
       }
     }
   }
-  if (gone) w.enemies = w.enemies.filter((e) => e.size > 0);
+  if (merged > 0) w.enemies = w.enemies.filter((e) => e.size > 0);
   for (const e of shed) w.enemies.push(e);
 }
 

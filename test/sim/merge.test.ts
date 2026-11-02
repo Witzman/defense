@@ -67,6 +67,7 @@ describe("merging (#44)", () => {
     const w = createWorld(level(10), { turrets: {} }, [], 1);
     const e = w.spawnBlob("green", 40, 3.5, 2.5);
     const hp = e.hp;
+    w.blobsSpawned = 5; // room under the blob count of the spawn
     for (let t = 0; t < 30 * 12; t++) step(w);
     expect(w.enemies.length).toBeGreaterThan(1);
     expect(w.enemies.reduce((s, b) => s + b.size, 0)).toBe(40);
@@ -86,6 +87,16 @@ describe("merging (#44)", () => {
     const big = run(6);
     expect(big).toBeLessThan(one);
     expect(big - 3.5).toBeGreaterThan((one - 3.5) * 0.7);
+  });
+
+  it("shedding never lifts the blob count above the blobs spawned", () => {
+    const w = pool(6);
+    let most = 0;
+    for (let t = 0; t < 30 * 30; t++) {
+      step(w);
+      most = Math.max(most, w.enemies.length);
+    }
+    expect(most).toBeLessThanOrEqual(6);
   });
 
   it("the same run twice gives the same result", () => {

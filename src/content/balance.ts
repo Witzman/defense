@@ -20,7 +20,8 @@ export const BALANCE = {
   /** Research cost: base × depthGrowth^(path length from the start) × size factor × progressGrowth^(nodes owned). */
   costBase: 15,
   costDepthGrowth: 1.2,
-  costProgressGrowth: 1.01,
+  /** 1.025 (#11): a full clear no longer buys the tree away; model: ~40 % of the tree owned at L10, ~70 % at L25 (1.01 gave 77 % at L10). */
+  costProgressGrowth: 1.025,
   /**
    * Cohesion of the stream (#40): 0 = blobs move independently and run through each other, 1 = a blob moves at the mean pace
    * of the 3 × 3 cells around it. Blobs also keep closer to the middle of a cell (lane × (1 − 0.6 × cohesion)).

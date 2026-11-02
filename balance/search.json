@@ -5,6 +5,7 @@
   "2": 2.964,
   "3": 5.521,
   "4": 2.434,
+  "5": 9.457,
   "6": 15.75
  },
  "levelKillValue": {
@@ -12,6 +13,7 @@
   "2": 0.9432,
   "3": 0.6833,
   "4": 0.9311,
+  "5": 1.206,
   "6": 0.9362
  },
  "levels": {
@@ -87,6 +89,23 @@
     "pointsPerMinute": 16308.67924528302,
     "bestEarlierPerMinute": 4372.318339100347,
     "nodes": 160
+   }
+  },
+  "5": {
+   "factor": 9.457,
+   "killValue": 1.206,
+   "failures": {
+    "generalist": 4
+   },
+   "inCorridor": false,
+   "diag": {
+    "seconds": 208.4,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.6059006211180125,
+    "pointsPerMinute": 29950.767754318615,
+    "bestEarlierPerMinute": 23637.921604375573,
+    "nodes": 227
    }
   },
   "6": {

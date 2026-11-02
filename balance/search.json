@@ -3,17 +3,17 @@
   "0": 0.8,
   "1": 1.454,
   "2": 3.261,
-  "3": 4.291,
-  "4": 2.611,
-  "5": 5.832,
+  "3": 3.4,
+  "4": 2.434,
+  "5": 3.796,
   "6": 15.75
  },
  "levelKillValue": {
   "1": 0.7327,
   "2": 1.586,
-  "3": 2.049,
-  "4": 2.68,
-  "5": 1.916,
+  "3": 0.7,
+  "4": 1.199,
+  "5": 0.9592,
   "6": 0.9362
  },
  "levels": {
@@ -58,54 +58,45 @@
    }
   },
   "3": {
-   "factor": 4.291,
-   "killValue": 2.049,
+   "factor": 3.4,
+   "killValue": 0.7,
    "failures": {
-    "generalist": 5
+    "generalist": 11
    },
-   "inCorridor": false,
-   "diag": {
-    "seconds": 85.46666666666667,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.5281306715063521,
-    "pointsPerMinute": 11821.45085803432,
-    "bestEarlierPerMinute": 2521.1655200323758,
-    "nodes": 108
-   }
+   "inCorridor": true
   },
   "4": {
-   "factor": 2.611,
-   "killValue": 2.68,
+   "factor": 2.434,
+   "killValue": 1.199,
    "failures": {
-    "generalist": 10
+    "generalist": 9
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 112.83333333333333,
-    "jamShare": 0.008849557522123894,
+    "seconds": 115,
+    "jamShare": 0.10869565217391304,
     "deepReach": 1,
     "waterShare": 0.5152529761904762,
-    "pointsPerMinute": 43879.58641063516,
-    "bestEarlierPerMinute": 13109.948096885815,
-    "nodes": 161
+    "pointsPerMinute": 18611.478260869564,
+    "bestEarlierPerMinute": 4480.91735179576,
+    "nodes": 159
    }
   },
   "5": {
-   "factor": 5.832,
-   "killValue": 1.916,
+   "factor": 3.796,
+   "killValue": 0.9592,
    "failures": {
-    "generalist": 7
+    "generalist": 9
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 290.8333333333333,
-    "jamShare": 0.36082474226804123,
+    "seconds": 282.6,
+    "jamShare": 0.2915194346289753,
     "deepReach": 1,
     "waterShare": 0.6059006211180125,
-    "pointsPerMinute": 33816.687679083094,
-    "bestEarlierPerMinute": 51732.224532224536,
-    "nodes": 209
+    "pointsPerMinute": 16982.377919320596,
+    "bestEarlierPerMinute": 21177.108433734942,
+    "nodes": 196
    }
   },
   "6": {

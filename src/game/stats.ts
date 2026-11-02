@@ -1,4 +1,4 @@
-import type { TurretKind } from "../content/turrets.ts";
+import type { Combo, ProcKind, TurretKind } from "../content/turrets.ts";
 import type { Credit } from "../sim/stats.ts";
 import type { World } from "../sim/world.ts";
 
@@ -33,7 +33,23 @@ export interface GoalLine {
   fell: boolean;
 }
 
+export interface EffectLine {
+  kind: TurretKind;
+  proc: ProcKind;
+  count: number;
+}
+
+export interface ComboLine {
+  combo: Combo;
+  hits: number;
+  /** Damage the combination added on top of the plain hits. */
+  damage: number;
+}
+
 export interface Analysis {
+  /** How often each hit effect triggered per turret kind, and what the status combinations added (#43). */
+  effects: EffectLine[];
+  combos: ComboLine[];
   types: TypeLine[];
   turrets: TurretLine[];
   /** Kills and damage that are no turret's: burning, the precision shot, others. Only those that did something. */
@@ -75,5 +91,11 @@ export function analyse(w: World): Analysis {
     if (!best || t.kills > best.kills || (t.kills === best.kills && t.damage > best.damage)) best = t;
     if (!worst || t.kills < worst.kills || (t.kills === worst.kills && t.damage < worst.damage)) worst = t;
   }
-  return { types, turrets, buckets, goals: goalLines, worstGoal, topArrived, best, worst };
+  const effects: EffectLine[] = [];
+  for (const [kind, procs] of Object.entries(s.procs) as [TurretKind, Partial<Record<ProcKind, number>>][])
+    for (const [proc, count] of Object.entries(procs) as [ProcKind, number][]) if (count > 0) effects.push({ kind, proc, count });
+  const combos = (Object.entries(s.combos) as [Combo, { hits: number; damage: number }][])
+    .filter(([, c]) => c.hits > 0)
+    .map(([combo, c]) => ({ combo, hits: c.hits, damage: c.damage }));
+  return { effects, combos, types, turrets, buckets, goals: goalLines, worstGoal, topArrived, best, worst };
 }

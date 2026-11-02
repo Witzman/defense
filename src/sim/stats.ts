@@ -3,6 +3,8 @@
  * Only counting: nothing here feeds back into the simulation, so a run plays exactly as without it.
  */
 
+import type { Combo, ProcKind, TurretKind } from "../content/turrets.ts";
+
 /** Whatever deals damage: a turret, burning, the precision shot, or a hit from outside (tests). */
 export interface Credit {
   /** Enemies killed. */
@@ -24,6 +26,10 @@ export interface RunStats {
   ability: Credit;
   /** Damage from outside the run's own sources (tests calling hit directly). */
   other: Credit;
+  /** How often each hit effect triggered, per turret kind (#43). */
+  procs: Partial<Record<TurretKind, Partial<Record<ProcKind, number>>>>;
+  /** Per status combination: hits that got its bonus and the damage that bonus added (#43). */
+  combos: Record<Combo, { hits: number; damage: number }>;
   /** Energy per goal, one sample per second of the run and one at its end; sample 0 is the start. */
   energy: number[][];
 }
@@ -39,6 +45,8 @@ export function createStats(goals: number, energy: number): RunStats {
     burn: { kills: 0, damage: 0 },
     ability: { kills: 0, damage: 0 },
     other: { kills: 0, damage: 0 },
+    procs: {},
+    combos: { shatter: { hits: 0, damage: 0 }, conduct: { hits: 0, damage: 0 }, blaze: { hits: 0, damage: 0 } },
     energy: Array.from({ length: goals }, () => [energy]),
   };
 }

@@ -116,6 +116,10 @@ export interface Enemy {
   frozenUntil: number;
   wetUntil: number;
   markUntil: number;
+  /** Chance collected towards the next merge (#44); negative = pause after shedding. Capped at 1. */
+  mergeAcc: number;
+  /** Chance collected towards the next shed (#44). */
+  splitAcc: number;
 }
 
 /** A turret in the run; as a Credit it counts its own kills and damage (#32). */
@@ -304,7 +308,7 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
       const e: Enemy = {
         id: w.nextId++, type, x, y, px: x, py: y, size,
         hp: size * t.hp * hpScale, shield: size * t.shield * hpScale, hpEach: t.hp * hpScale,
-        speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0, frozenUntil: 0, wetUntil: 0, markUntil: 0,
+        speed: level.enemies.speed * t.speed, baseSpeed: level.enemies.speed * t.speed, slowUntil: 0, burnDps: 0, burnUntil: 0, frozenUntil: 0, wetUntil: 0, markUntil: 0, mergeAcc: 0, splitAcc: 0,
       };
       w.enemies.push(e);
       w.active += size;
@@ -357,6 +361,7 @@ export function step(w: World): void {
   if (w.tick % REROUTE_TICKS === 0) reroute(w);
   move(w);
   if (w.status !== "running") return sampleEnergy(w.stats, w.energies);
+  fuse(w);
   burn(w);
   fire(w);
   sweep(w);
@@ -689,6 +694,7 @@ function move(w: World) {
       const len = Math.hypot(vx, vy);
       const mean = meanPace(w, cx, cy, e.speed);
       let pace = e.speed * (1 - stick) + mean * stick;
+      if (BALANCE.sizePaceK > 0 && e.size > w.packet) pace *= Math.max(BALANCE.sizePaceMin, 1 - BALANCE.sizePaceK * Math.log(e.size / w.packet));
       // Held up only where a heavier blob is in its own cell or the one it steps into; in a clear lane it keeps its pace.
       if (yields && (blocked || maxWeight[ci]! > mine)) pace *= 1 - pass;
       const k = Math.min(1, (pace * DT) / len);
@@ -708,6 +714,105 @@ function move(w: World) {
     survivors.push(e);
   }
   w.enemies = survivors;
+}
+
+// --- merging and shedding (#44) -------------------------------------------------------------------------
+
+let fuseHead = new Int32Array(0);
+let fuseNext = new Int32Array(0);
+
+/**
+ * Blobs of one type in one cell merge into a bigger drop; a big blob sheds a share of its members as a new blob, which
+ * waits a while before it may merge again. Chances are collected per blob (no dice), in array order: deterministic.
+ * Nothing changes any cell's density, because every change happens inside one cell.
+ */
+function fuse(w: World) {
+  const merge = BALANCE.mergeRate * DT;
+  const split = BALANCE.splitRate * DT;
+  if (merge <= 0 && split <= 0) return;
+  const { width } = w.level.map;
+  const list = w.enemies;
+  if (fuseHead.length < w.density.length) fuseHead = new Int32Array(w.density.length);
+  if (fuseNext.length < list.length) fuseNext = new Int32Array(list.length * 2);
+  fuseHead.fill(-1, 0, w.density.length);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i]!;
+    const c = Math.floor(e.y) * width + Math.floor(e.x);
+    fuseNext[i] = fuseHead[c]!;
+    fuseHead[c] = i;
+  }
+  const shed: Enemy[] = [];
+  let gone = false;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i]!;
+    if (e.size <= 0) continue;
+    if (merge > 0) {
+      if (e.mergeAcc < 0) {
+        e.mergeAcc = Math.min(0, e.mergeAcc + DT);
+      } else {
+        const c = Math.floor(e.y) * width + Math.floor(e.x);
+        let partner = -1;
+        for (let j = fuseHead[c]!; j >= 0; j = fuseNext[j]!) {
+          const o = list[j]!;
+          if (j !== i && o.size > 0 && o.type === e.type && o.mergeAcc >= 0 && e.size + o.size <= w.cellCapacity) {
+            partner = j;
+            break;
+          }
+        }
+        // Chance is only collected while there is someone to merge with, so it never banks up for later.
+        e.mergeAcc = partner < 0 ? 0 : e.mergeAcc + merge;
+        if (e.mergeAcc >= 1) {
+          e.mergeAcc = 0;
+          absorb(e, list[partner]!);
+          gone = true;
+        }
+      }
+    }
+    if (split > 0 && e.size >= 2) {
+      e.splitAcc += split;
+      if (e.splitAcc >= 1) {
+        e.splitAcc = 0;
+        shed.push(shedFrom(w, e));
+      }
+    }
+  }
+  if (gone) w.enemies = w.enemies.filter((e) => e.size > 0);
+  for (const e of shed) w.enemies.push(e);
+}
+
+/** `from` flows into `into`: pools add up, the position is the mass-weighted mean, the bigger blob's states stay. */
+function absorb(into: Enemy, from: Enemy) {
+  const total = into.size + from.size;
+  if (from.size > into.size) {
+    into.speed = from.speed;
+    into.slowUntil = from.slowUntil;
+    into.burnDps = from.burnDps;
+    into.burnUntil = from.burnUntil;
+    into.frozenUntil = from.frozenUntil;
+    into.wetUntil = from.wetUntil;
+    into.markUntil = from.markUntil;
+  }
+  into.x = (into.x * into.size + from.x * from.size) / total;
+  into.y = (into.y * into.size + from.y * from.size) / total;
+  into.px = (into.px * into.size + from.px * from.size) / total;
+  into.py = (into.py * into.size + from.py * from.size) / total;
+  into.hp += from.hp;
+  into.shield += from.shield;
+  into.size = total;
+  from.size = 0;
+  from.hp = 0;
+  from.shield = 0;
+}
+
+/** A share of the members leaves `e` as a new blob in the same cell, with its share of the pools and the same states. */
+function shedFrom(w: World, e: Enemy): Enemy {
+  const n = Math.min(e.size - 1, Math.max(1, Math.round(e.size * BALANCE.splitShare)));
+  const share = n / e.size;
+  const out: Enemy = { ...e, id: w.nextId++, size: n, hp: e.hp * share, shield: e.shield * share, mergeAcc: -BALANCE.shedPause, splitAcc: 0 };
+  e.size -= n;
+  e.hp -= out.hp;
+  e.shield -= out.shield;
+  return out;
 }
 
 /**

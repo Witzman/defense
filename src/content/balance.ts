@@ -33,6 +33,20 @@ export const BALANCE = {
    */
   passPenalty: 0.3,
   /**
+   * Merging and shedding (#44): blobs of one type in one cell merge at `mergeRate` per second (expected events, collected
+   * rather than rolled, so a run stays the same, #28). A blob of at least two enemies sheds `splitShare` of its members at
+   * `splitRate` per second, a little below the merge rate, so the mass slowly grows together but frays at its edge. A merged
+   * blob never exceeds a cell's capacity. 0 for `mergeRate` = blobs never merge, exactly as before.
+   */
+  mergeRate: 0.12,
+  splitRate: 0.1,
+  splitShare: 0.15,
+  /** A shed blob waits this many seconds before it merges again, or it would fall straight back into the mass. */
+  shedPause: 8,
+  /** Pace of a blob: × max(sizePaceMin, 1 − sizePaceK × ln(size / packet)), so big masses are a little slower and jam (#44). */
+  sizePaceK: 0.04,
+  sizePaceMin: 0.75,
+  /**
    * Avoiding danger (#39): extra cost of a cell at full danger, times the type's dangerAvoidance and the level's
    * learning. Learning grows from 0 at level `dangerLearnFrom` to 1 at `dangerLearnTo` (level numbers from 1).
    */

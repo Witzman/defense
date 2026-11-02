@@ -69,7 +69,9 @@ export class Fluid {
       const x = (e.px + (e.x - e.px) * alpha - r.x0) * k;
       const y = (e.py + (e.y - e.py) * alpha - r.y0) * k;
       // A packet of many is a bigger drop than one enemy.
-      const R = 0.68 * Math.min(1.6, 0.8 + Math.log10(e.size + 1) * 0.3) * k;
+      // A drop that merged from several (#44) is bigger still: by how many packets it holds.
+      const merged = e.size > w.packet ? 1 + 0.18 * Math.log(e.size / w.packet) : 1;
+      const R = 0.68 * Math.min(1.6, (0.8 + Math.log10(e.size + 1) * 0.3) * merged) * k;
       const xa = Math.max(0, Math.floor(x - R));
       const xb = Math.min(cols - 1, Math.ceil(x + R));
       const ya = Math.max(0, Math.floor(y - R));

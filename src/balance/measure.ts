@@ -79,7 +79,7 @@ function jamShareOf(w: World): number {
     step(w);
     if (t % REROUTE_TICKS !== 0) continue;
     let full = 0;
-    for (let i = 0; i < map.cells.length; i++) if (map.cells[i] === WATER && w.density[i]! >= w.cellCapacity) full++;
+    for (let i = 0; i < map.cells.length; i++) if (map.cells[i] === WATER && w.density[i]! + w.packet > w.cellCapacity) full++;
     samples++;
     if (full >= 0.05 * wet) jammed++;
   }

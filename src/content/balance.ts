@@ -47,6 +47,12 @@ export const BALANCE = {
   sizePaceK: 0.04,
   sizePaceMin: 0.75,
   /**
+   * Packets one water cell holds (#11, criterion 4): `early` up to level index `from` - 1, `late` from there on. A cell with
+   * room for fewer packets fills sooner, so the stream queues and spills in the later campaign. Whole packets only: a
+   * cell is full when no further packet fits.
+   */
+  cellPackets: { early: 3, late: 2, from: 5 },
+  /**
    * Avoiding danger (#39): extra cost of a cell at full danger, times the type's dangerAvoidance and the level's
    * learning. Learning grows from 0 at level `dangerLearnFrom` to 1 at `dangerLearnTo` (level numbers from 1).
    */

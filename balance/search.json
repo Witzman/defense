@@ -1,19 +1,19 @@
 {
  "levelHp": {
   "0": 0.8,
-  "1": 1.673,
-  "2": 4.28,
-  "3": 8.911,
-  "4": 5.161,
-  "5": 13.43,
+  "1": 1.454,
+  "2": 3.261,
+  "3": 3.4,
+  "4": 2.434,
+  "5": 3.796,
   "6": 15.75
  },
  "levelKillValue": {
-  "1": 1.068,
-  "2": 1.492,
-  "3": 1.14,
-  "4": 0.8286,
-  "5": 1.082,
+  "1": 0.7327,
+  "2": 1.586,
+  "3": 0.7,
+  "4": 1.199,
+  "5": 0.9592,
   "6": 0.9362
  },
  "levels": {
@@ -24,79 +24,79 @@
    "inCorridor": false
   },
   "1": {
-   "factor": 1.673,
-   "killValue": 1.068,
+   "factor": 1.454,
+   "killValue": 0.7327,
    "failures": {
-    "generalist": 8
-   },
-   "inCorridor": true
-  },
-  "2": {
-   "factor": 4.28,
-   "killValue": 1.492,
-   "failures": {
-    "generalist": 7
+    "generalist": 10
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 95.26666666666667,
+    "seconds": 76.73333333333333,
+    "jamShare": 0,
+    "deepReach": 1,
+    "waterShare": 0.7427536231884058,
+    "pointsPerMinute": 332.3197219808862,
+    "bestEarlierPerMinute": 129.49640287769785,
+    "nodes": 6
+   }
+  },
+  "2": {
+   "factor": 3.261,
+   "killValue": 1.586,
+   "failures": {
+    "generalist": 9
+   },
+   "inCorridor": true,
+   "diag": {
+    "seconds": 102.96666666666667,
     "jamShare": 0,
     "deepReach": 1,
     "waterShare": 0.49321266968325794,
-    "pointsPerMinute": 2050.034989503149,
-    "bestEarlierPerMinute": 524.3294117647059,
-    "nodes": 87
+    "pointsPerMinute": 2016.7691809647135,
+    "bestEarlierPerMinute": 352.859778597786,
+    "nodes": 71
    }
   },
   "3": {
-   "factor": 8.911,
-   "killValue": 1.14,
+   "factor": 3.4,
+   "killValue": 0.7,
    "failures": {
-    "generalist": 5
+    "generalist": 11
    },
-   "inCorridor": false,
-   "diag": {
-    "seconds": 108.3,
-    "jamShare": 0,
-    "deepReach": 1,
-    "waterShare": 0.5281306715063521,
-    "pointsPerMinute": 5192.24376731302,
-    "bestEarlierPerMinute": 2383.6452400325466,
-    "nodes": 142
-   }
+   "inCorridor": true
   },
   "4": {
-   "factor": 5.161,
-   "killValue": 0.8286,
+   "factor": 2.434,
+   "killValue": 1.199,
    "failures": {
     "generalist": 9
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 108.86666666666666,
-    "jamShare": 0,
+    "seconds": 115,
+    "jamShare": 0.10869565217391304,
     "deepReach": 1,
     "waterShare": 0.5152529761904762,
-    "pointsPerMinute": 14130.496019595837,
-    "bestEarlierPerMinute": 7770.4283740211895,
-    "nodes": 208
+    "pointsPerMinute": 18611.478260869564,
+    "bestEarlierPerMinute": 4480.91735179576,
+    "nodes": 159
    }
   },
   "5": {
-   "factor": 13.43,
-   "killValue": 1.082,
+   "factor": 3.796,
+   "killValue": 0.9592,
    "failures": {
     "generalist": 9
    },
    "inCorridor": true,
    "diag": {
-    "seconds": 206.63333333333333,
-    "jamShare": 0,
+    "seconds": 282.6,
+    "jamShare": 0.2915194346289753,
     "deepReach": 1,
     "waterShare": 0.6059006211180125,
-    "pointsPerMinute": 26280.754960477498,
-    "bestEarlierPerMinute": 20929.795918367345,
-    "nodes": 329
+    "pointsPerMinute": 16982.377919320596,
+    "bestEarlierPerMinute": 21177.108433734942,
+    "nodes": 196
    }
   },
   "6": {

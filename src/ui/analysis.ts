@@ -1,5 +1,5 @@
 import { enemyType } from "../content/enemies.ts";
-import { COMBO_TEXT, PROC_LABEL, turretType, type TurretKind } from "../content/turrets.ts";
+import { COMBO_TEXT, EFFECT_LABEL, turretType, type TurretKind } from "../content/turrets.ts";
 import type { Analysis, GoalLine } from "../game/stats.ts";
 import { SAMPLE_TICKS } from "../sim/stats.ts";
 import { DT } from "../sim/world.ts";
@@ -73,7 +73,7 @@ export function renderAnalysis(root: HTMLElement, a: Analysis, opts: { goalEnerg
     return `<figure class="goal"><figcaption>${goalName(i, n)} <b class="${g.fell ? "fell" : ""}">${g.fell ? "gefallen" : `${pct} %`}</b></figcaption>`
       + `${curveSvg(g, opts.goalEnergy)}<div class="axis"><span>0:00</span><span>${seconds(secs)}</span></div></figure>`;
   });
-  const effectRows = a.effects.map((x) => `<tr><td>${symbol(x.kind)} ${turretType(x.kind).name}</td><td>${PROC_LABEL[x.proc]}</td><td>${fmt.format(x.count)}</td></tr>`);
+  const effectRows = a.effects.map((x) => `<tr><td>${symbol(x.kind)} ${turretType(x.kind).name}</td><td>${EFFECT_LABEL[x.proc]}</td><td>${fmt.format(x.count)}</td></tr>`);
   const comboRows = a.combos.map((c) => `<tr><td colspan="2">${COMBO_TEXT[c.combo].split(":")[0]}</td><td>${fmt.format(c.hits)} Treffer, +${round(c.damage)} Schaden</td></tr>`);
   const effects = effectRows.length + comboRows.length === 0 ? ""
     : `<h3>Wirkungen</h3><table class="numbers"><thead><tr><th>Geschütz</th><th>Wirkung</th><th>ausgelöst</th></tr></thead><tbody>${effectRows.join("")}${comboRows.join("")}</tbody></table>`;

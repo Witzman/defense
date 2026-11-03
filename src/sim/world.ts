@@ -2,7 +2,7 @@ import { cellAt, LAND, type GameMap, type Point } from "./map.ts";
 import { depthField, distanceField } from "./flow.ts";
 import { createRng, type Rng } from "./rng.ts";
 import { enemyType, enemyWeight, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
-import { turretType, type Combo, type Pattern, type ProcKind, type TurretKind, type TurretStats } from "../content/turrets.ts";
+import { turretType, type Combo, type DeathFx, type Pattern, type ProcKind, type TurretKind, type TurretStats } from "../content/turrets.ts";
 import { BALANCE } from "../content/balance.ts";
 import { countArrived, createStats, sampleEnergy, SAMPLE_TICKS, type Credit, type RunStats } from "./stats.ts";
 
@@ -73,7 +73,7 @@ export interface LevelDef {
 /** What research gives the player for a run: per turret kind how many may stand and how strong each is. */
 export interface Arsenal {
   /** Per kind: how many may stand, how strong each is, and the weapon pattern as research changed it. */
-  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats; pattern?: Pattern; procs?: Partial<Record<ProcKind, { chance: number; power: number }>> }>>;
+  turrets: Partial<Record<TurretKind, { capacity: number; stats: TurretStats; pattern?: Pattern; procs?: Partial<Record<ProcKind, { chance: number; power: number }>>; death?: DeathFx[] }>>;
   ability?: Ability;
   /** Combinations of statuses switched on by research (#42). */
   combos?: Combo[];
@@ -228,6 +228,10 @@ export interface World {
   stats: RunStats;
   /** Who is dealing damage right now: the firing turret, burning, the precision shot, or `stats.other`. */
   source: Credit;
+  /** Kills of this tick whose turret leaves a death effect (#43); resolved after the volleys, never chained. */
+  deaths: { x: number; y: number; dead: number; turret: Turret }[];
+  /** True while death effects resolve, so their own kills leave no further effect. */
+  resolving: boolean;
   /** Deals `amount` damage of a type to a blob: shield first, then hit points; returns the amount used. */
   hit(e: Enemy, amount: number, type: DamageType): number;
   /** Damage to every blob within `radius` of a point. */
@@ -298,6 +302,8 @@ export function createWorld(level: LevelDef, arsenal: Arsenal, placements: reado
     abilityReadyTick: 0,
     stats: createStats(level.map.goals.length, level.goalEnergy),
     source: undefined!,
+    deaths: [],
+    resolving: false,
     get perfect() {
       return this.status === "won" && this.energies.every((e) => e === this.level.goalEnergy);
     },
@@ -368,6 +374,7 @@ export function step(w: World): void {
   fuse(w);
   burn(w);
   fire(w);
+  resolveDeaths(w);
   sweep(w);
   if (w.toSpawn === 0 && w.active === 0) w.status = "won";
   if (w.tick % SAMPLE_TICKS === 0 || w.status !== "running") sampleEnergy(w.stats, w.energies);
@@ -475,6 +482,50 @@ function killTo(w: World, e: Enemy, alive: number) {
   const cell = Math.floor(e.y) * w.level.map.width + Math.floor(e.x);
   w.density[cell]! -= dead;
   w.danger[cell]! += dead / w.cellCapacity;
+  const src = w.source as Partial<Turret>;
+  if (!w.resolving && src.kind && w.arsenal.turrets[src.kind]?.death?.length) w.deaths.push({ x: e.x, y: e.y, dead, turret: src as Turret });
+}
+
+/** Death effects (#43): per turret and cell one effect for all that died there this tick, scaled by their number. */
+const DEATH_RADIUS = 1.2;
+/** Deaths per effect and tick that count; a packet of thousands does not blow up the sum. */
+const DEATH_CAP = 8;
+function resolveDeaths(w: World) {
+  if (w.deaths.length === 0) return;
+  const list = w.deaths;
+  w.deaths = [];
+  w.resolving = true;
+  const previous = w.source;
+  for (const d of list) {
+    const t = d.turret;
+    const fx = w.arsenal.turrets[t.kind]?.death ?? [];
+    const n = Math.min(d.dead, DEATH_CAP);
+    w.source = t;
+    for (const f of fx) {
+      const counted = w.stats.death[t.kind] ?? (w.stats.death[t.kind] = {});
+      counted[f] = (counted[f] ?? 0) + 1;
+      switch (f) {
+        case "explode":
+          w.splash(d.x, d.y, DEATH_RADIUS, t.stats.damage * n * 0.5, "explosive");
+          w.shots.push({ kind: "blast", at: { x: d.x, y: d.y }, radius: DEATH_RADIUS, turret: t.kind });
+          break;
+        case "chill":
+          for (const o of w.enemies) {
+            if (o.size <= 0 || (o.x - d.x) ** 2 + (o.y - d.y) ** 2 > DEATH_RADIUS * DEATH_RADIUS) continue;
+            o.speed = Math.min(o.speed, o.baseSpeed * 0.3);
+            o.slowUntil = Math.max(o.slowUntil, w.tick + Math.round(2 / DT));
+            o.frozenUntil = Math.max(o.frozenUntil, w.tick + Math.round(2 / DT));
+            o.wetUntil = Math.max(o.wetUntil, w.tick + Math.round(3 / DT));
+          }
+          break;
+        case "hazard":
+          w.danger[Math.floor(d.y) * w.level.map.width + Math.floor(d.x)]! += (d.dead * 2) / w.cellCapacity;
+          break;
+      }
+    }
+  }
+  w.source = previous;
+  w.resolving = false;
 }
 
 function sweep(w: World) {

@@ -36,6 +36,21 @@ export interface TurretStats {
 export type ProcKind = "freeze" | "stun" | "ignite" | "grenade" | "mark";
 export const PROC_LABEL: Record<ProcKind, string> = { freeze: "einfrieren", stun: "betäuben", ignite: "entzünden", grenade: "Granate auf den Nebenmann", mark: "markieren" };
 
+/**
+ * Death effects (#43): what a kill of this turret leaves behind. Keystones of the hit-effect chains teach them.
+ * explode: the dead blob bursts and hurts its surroundings; chill: it freezes them; hazard: the place turns dangerous
+ * (the danger field of #39, so the stream avoids it).
+ */
+export type DeathFx = "explode" | "chill" | "hazard";
+export const DEATH_LABEL: Record<DeathFx, string> = { explode: "Explosion", chill: "Kältestoß", hazard: "Gefahrenzone" };
+export const DEATH_TEXT: Record<DeathFx, string> = {
+  explode: "Explosion: Getötete Gegner platzen und verletzen ihre Umgebung",
+  chill: "Kältestoß: Getötete Gegner frieren ihre Umgebung ein",
+  hazard: "Gefahrenzone: Wo Gegner sterben, meiden die anderen den Ort stärker",
+};
+
+export const EFFECT_LABEL: Record<ProcKind | DeathFx, string> = { ...PROC_LABEL, ...DEATH_LABEL };
+
 /** Combinations between kinds that research can switch on (#42). */
 export type Combo = "shatter" | "conduct" | "blaze";
 export const COMBO_TEXT: Record<Combo, string> = {

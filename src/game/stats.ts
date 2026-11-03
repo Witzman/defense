@@ -1,4 +1,4 @@
-import type { Combo, ProcKind, TurretKind } from "../content/turrets.ts";
+import type { Combo, DeathFx, ProcKind, TurretKind } from "../content/turrets.ts";
 import type { Credit } from "../sim/stats.ts";
 import type { World } from "../sim/world.ts";
 
@@ -35,7 +35,7 @@ export interface GoalLine {
 
 export interface EffectLine {
   kind: TurretKind;
-  proc: ProcKind;
+  proc: ProcKind | DeathFx;
   count: number;
 }
 
@@ -94,6 +94,8 @@ export function analyse(w: World): Analysis {
   const effects: EffectLine[] = [];
   for (const [kind, procs] of Object.entries(s.procs) as [TurretKind, Partial<Record<ProcKind, number>>][])
     for (const [proc, count] of Object.entries(procs) as [ProcKind, number][]) if (count > 0) effects.push({ kind, proc, count });
+  for (const [kind, fxs] of Object.entries(s.death) as [TurretKind, Partial<Record<DeathFx, number>>][])
+    for (const [fx, count] of Object.entries(fxs) as [DeathFx, number][]) if (count > 0) effects.push({ kind, proc: fx, count });
   const combos = (Object.entries(s.combos) as [Combo, { hits: number; damage: number }][])
     .filter(([, c]) => c.hits > 0)
     .map(([combo, c]) => ({ combo, hits: c.hits, damage: c.damage }));

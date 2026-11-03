@@ -6,7 +6,7 @@
  * A node can be bought when it touches a bought node (links, either direction) and every node in `requiresAll`
  * is bought. Cost grows with the path length from the start, so a far direction costs more by distance alone.
  */
-import { TURRET_TYPES, turretType, type Combo, type ProcKind, type TurretKind } from "./turrets.ts";
+import { TURRET_TYPES, turretType, type Combo, type DeathFx, type ProcKind, type TurretKind } from "./turrets.ts";
 import type { DamageType } from "./enemies.ts";
 import { BALANCE } from "./balance.ts";
 
@@ -26,6 +26,8 @@ export type Effect =
   | { kind: "proc"; turret: TurretKind; proc: ProcKind; chance: number }
   /** Makes the proc stronger: longer, harder, more damage (×(1 + power)). */
   | { kind: "procPower"; turret: TurretKind; proc: ProcKind; add: number }
+  /** A kill of this kind leaves a death effect behind (#43). */
+  | { kind: "deathFx"; turret: TurretKind; fx: DeathFx }
   /** Switches on a combination of statuses for all kinds. */
   | { kind: "combo"; combo: Combo }
   | { kind: "pattern"; turret: TurretKind; field: PatternField; add: number }
@@ -339,6 +341,19 @@ const PROC_NAMES: Record<ProcKind, [string, string, string]> = {
   mark: ["Zielmarkierung", "Schwachstelle", "Todesmarke"],
 };
 
+/** Which keystone of which kind also teaches a death effect (#43): bursting shells, cold, and burning ground. */
+const DEATH: Partial<Record<TurretKind, Partial<Record<ProcKind, DeathFx>>>> = {
+  mortar: { grenade: "explode" },
+  rocket: { grenade: "explode", freeze: "chill" },
+  frost: { freeze: "chill" },
+  napalm: { freeze: "chill", ignite: "hazard" },
+  flamer: { ignite: "hazard" },
+};
+function deathOf(k: TurretKind, proc: ProcKind): Effect[] {
+  const fx = DEATH[k]?.[proc];
+  return fx ? [{ kind: "deathFx", turret: k, fx }] : [];
+}
+
 /** A chain of one hit effect: small steps raise the chance, the notables more, the keystone makes it hit harder (#42). */
 function procChain(id: string, k: TurretKind, proc: ProcKind, length = 7): Chain {
   const [name, notableName, keystoneName] = PROC_NAMES[proc];
@@ -346,7 +361,7 @@ function procChain(id: string, k: TurretKind, proc: ProcKind, length = 7): Chain
     id, name, notableName, keystoneName, length,
     small: [{ kind: "proc", turret: k, proc, chance: 0.025 }],
     notable: [{ kind: "proc", turret: k, proc, chance: 0.08 }],
-    keystone: [{ kind: "proc", turret: k, proc, chance: 0.2 }, { kind: "procPower", turret: k, proc, add: 1 }],
+    keystone: [{ kind: "proc", turret: k, proc, chance: 0.2 }, { kind: "procPower", turret: k, proc, add: 1 }, ...deathOf(k, proc)],
   };
 }
 

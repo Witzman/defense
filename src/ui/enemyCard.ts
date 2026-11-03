@@ -1,5 +1,5 @@
 import { DAMAGE_TYPES, ENEMY_TYPES, enemyType, SHIELD_BREAKER, vulnerability, type DamageType, type EnemyType } from "../content/enemies.ts";
-import { turretType, type TurretKind } from "../content/turrets.ts";
+import { PROC_LABEL, turretType, type TurretKind } from "../content/turrets.ts";
 
 /**
  * The enemy card (#31, #32): what a type is and which of the player's turrets work against it. One card for the
@@ -36,6 +36,8 @@ export interface EnemyFacts {
   /** Damage types it resists, with the share it ignores (1 = immune). */
   resist: { type: DamageType; share: number }[];
   immune: string[];
+  /** Hit effects (#42) that do nothing to this type. */
+  unaffected: string[];
   verdicts: Verdict[];
 }
 
@@ -72,6 +74,8 @@ export function enemyFacts(t: EnemyType, kinds: readonly TurretKind[]): EnemyFac
   const resist = DAMAGE_TYPES.filter((d) => vulnerability(t, d) < 1).map((d) => ({ type: d, share: 1 - vulnerability(t, d) }));
   const immune = resist.filter((r) => r.share >= 1).map((r) => `${DAMAGE_NAMES[r.type]}schaden`);
   if (t.instantKillImmune) immune.push("Sofort-Kill (Laser)");
+  // The only effect a type can shrug off is burning: `trigger` skips ignite on the fire-immune.
+  const unaffected = vulnerability(t, "fire") === 0 ? [PROC_LABEL.ignite] : [];
   return {
     type: t,
     hp: t.hp / BASE_HP,
@@ -80,6 +84,7 @@ export function enemyFacts(t: EnemyType, kinds: readonly TurretKind[]): EnemyFac
     depth: depthWord(t.depthPreference),
     resist: resist.filter((r) => r.share < 1),
     immune,
+    unaffected,
     verdicts: kinds.map((k) => verdict(t, k)),
   };
 }
@@ -100,6 +105,7 @@ function cardHtml(f: EnemyFacts, lines: readonly string[]): string {
     `<dt>Weg</dt><dd>${f.depth}</dd>`,
     f.resist.length ? `<dt>Resistenz</dt><dd>${f.resist.map((r) => `${DAMAGE_NAMES[r.type]} −${Math.round(r.share * 100)} %`).join(", ")}</dd>` : "",
     f.immune.length ? `<dt>Immun</dt><dd>${f.immune.join(", ")}</dd>` : "",
+    `<dt>Zustände</dt><dd>${f.unaffected.length ? `${f.unaffected.join(", ")} wirkt nicht` : "Frost, Feuer, Betäubung, Markierung wirken"}</dd>`,
   ].join("");
   // Grouped by how well they work, so the answer to "what do I build against it" is one line each.
   const groups = (["good", "fair", "bad"] as const).map((rating) => {

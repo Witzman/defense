@@ -27,6 +27,11 @@ describe("enemy card (#31, #32)", () => {
     expect(f.resist.map((r) => r.type)).not.toContain("fire");
   });
 
+  it("names the hit effects a type shrugs off (#43): burning on Glut, nothing on Grünling", () => {
+    expect(enemyFacts(enemyType("ember"), ALL).unaffected).toEqual(["entzünden"]);
+    expect(enemyFacts(enemyType("green"), ALL).unaffected).toEqual([]);
+  });
+
   it("electric turrets break shields; the Panzer shrugs off kinetic", () => {
     expect(verdict(enemyType("shield"), "breaker").rating).toBe("good");
     expect(verdict(enemyType("armor"), "gatling").rating).toBe("bad");
